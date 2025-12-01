@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>월 PR 분석 자동반영</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg:#f8fafc; --card:#fff; --line:#e2e8f0;
+    --brand:#2563eb; --brand-light:#dbeafe; --text:#111827; --muted:#6b7280;
+    --radius:14px; --shadow:0 4px 14px rgba(0,0,0,0.04);
+  }
+  * {box-sizing:border-box; transition: all .3s ease;}
+  body {font-family: "Pretendard", ui-sans-serif, system-ui; background:var(--bg); color:var(--text); margin:0;}
+  .wrap {max-width:820px; margin:60px auto; padding:0 24px; animation:fadeIn .6s ease;}
+  h1 {font-size:26px; font-weight:700; margin-bottom:12px;}
+  .steps {display:flex; justify-content:space-between; margin-bottom:26px; position:relative;}
+  .steps::before {content:""; position:absolute; top:50%; left:50px; right:50px; height:3px; background:var(--line); transform:translateY(-50%);}
+  .step {display:flex; flex-direction:column; align-items:center; z-index:2;}
+  .circle {width:38px; height:38px; border-radius:50%; background:var(--brand-light); color:var(--brand); display:flex; align-items:center; justify-content:center; font-weight:700; margin-bottom:6px; box-shadow:var(--shadow);}
+  .card {background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:24px; box-shadow:var(--shadow); margin-bottom:24px; animation:slideUp .6s ease;}
+  .card h2 {font-size:18px; margin:0 0 10px;}
+  .card p {color:var(--muted); font-size:14px; margin:0 0 16px;}
+  label {font-weight:600; font-size:14px; margin:10px 0 5px; display:block;}
+  input[type="file"], input[type="number"] {width:100%; padding:10px; border:1px solid var(--line); border-radius:10px; background:#fff;}
+  button {margin-top:16px; padding:11px 16px; border:none; border-radius:10px; font-weight:600; color:#fff; background:var(--brand); cursor:pointer; width:100%;}
+  button:hover {background:#1d4ed8;}
+  button[disabled] {background:#cbd5e1; color:#f1f5f9; cursor:not-allowed;}
+  form {display:flex; flex-direction:column;}
+  .footer {text-align:center; color:#94a3b8; font-size:12px; margin-top:40px;}
+  .disabled-box {opacity:.65; filter:grayscale(.2);}
+  @keyframes fadeIn {from{opacity:0;} to{opacity:1;}}
+  @keyframes slideUp {from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);}}
+
+  /* 로딩 오버레이 + 진행바 */
+  .loading-overlay {
+    position: fixed;
+    top:0; left:0; width:100%; height:100%;
+    background: rgba(248, 250, 252, 0.9);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    z-index:9999;
+    opacity:0;
+    pointer-events:none;
+    transition: opacity .3s ease;
+  }
+  .loading-overlay.active {
+    opacity:1;
+    pointer-events:auto;
+  }
+  .loader-text {
+    font-size:20px;
+    font-weight:700;
+    margin-bottom:20px;
+    color:var(--brand);
+  }
+  .progress-bar {
+    width:300px;
+    height:10px;
+    background:#e5e7eb;
+    border-radius:999px;
+    overflow:hidden;
+    box-shadow:0 0 0 1px rgba(148,163,184,0.4) inset;
+  }
+  .progress-inner {
+    width:0%;
+    height:100%;
+    background:var(--brand);
+    animation: loadingAnim 2.8s infinite;
+  }
+  @keyframes loadingAnim {
+    0% { width:0%; }
+    70% { width:100%; }
+    100% { width:100%; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>PR Tracking System</h1>
+  <br>
+
+  <!-- Step Progress -->
+  <div class="steps">
+    <div class="step"><div class="circle">1</div><span>자동 분류</span></div>
+    <div class="step"><div class="circle">2</div><span>work sheet 분석</span></div>
+    <div class="step"><div class="circle">3</div><span>★ 마스터 파일 업데이트</span></div>
+  </div>
+
+  <!-- Step 1 -->
+  <div class="card">
+    <h2>Step 1. raw data & "월 PR 분석.xslx" 파일 업로드</h2>
+    <p>자동으로 시트명·기간·카테고리를 반영한 결과 파일을 생성합니다.</p>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="step" value="1">
+      <label>월 (1-12)</label>
+      {{ form.month }}
+      <label>raw data File</label>
+      {{ form.raw_file }}
+      <label>월 PR 분석 File</label>
+      {{ form.monthly_file }}
+      <button type="submit">분석 실행 & 다운로드</button>
+    </form>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="card">
+    <h2>Step 2. 검수본 업로드</h2>
+    <p>Step 1에서 다운 받은 파일에서 "미분류" 카테고리 검수 후 업로드.</p>
+    <p>*_work 시트를 분석합니다.</p>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="step" value="2">
+      <label>검수 완료 파일</label>
+      <input type="file" name="checked_file" accept=".xlsx" required>
+      <button type="submit">월 PR Tracking File 완성본 다운로드</button>
+    </form>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="card">
+    <h2>Step 3. 마스터 반영</h2>
+    <p>검수 완료본과 마스터 파일을 업로드해 최종 반영본을 만듭니다.</p>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="step" value="3">
+      <label>검수 완료 파일</label>
+      <input type="file" name="checked_file_step3" accept=".xlsx" required>
+      <label>마스터 파일</label>
+      <input type="file" name="master_file" accept=".xlsx" required>
+      <button type="submit">Master File Download</button>
+    </form>
+  </div>
+
+  <div class="footer">© 2025 PR Auto Analysis</div>
+</div>
+
+<!-- 로딩 오버레이 -->
+<div id="loading-overlay" class="loading-overlay">
+  <div class="loader-text">분석 중입니다...</div>
+  <div class="progress-bar">
+    <div class="progress-inner"></div>
+  </div>
+</div>
+
+<script>
+  function showLoading() {
+    const overlay = document.getElementById("loading-overlay");
+    if (overlay) {
+      overlay.classList.add("active");
+    }
+  }
+  function hideLoading() {
+    const overlay = document.getElementById("loading-overlay");
+    if (overlay) {
+      overlay.classList.remove("active");
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    // 모든 폼 submit 시 로딩 표시 + 3초 후 자동 해제
+    document.querySelectorAll("form").forEach(form => {
+      form.addEventListener("submit", () => {
+        showLoading();
+        setTimeout(hideLoading, 3000);  // 3초 후 자동으로 숨김
+      });
+    });
+  });
+</script>
+</body>
+</html>
