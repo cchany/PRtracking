@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>네이버 뉴스 수집</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<!-- ✅ Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+
+<style>
+  :root{
+    --bg:#0f172a;
+    --card:#111827;
+    --line:#1f2933;
+    --brand:#38bdf8;
+    --text:#e5e7eb;
+    --muted:#9ca3af;
+    --radius:16px;
+    --shadow:0 12px 30px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+
+  body{
+    margin:0;
+    font-family:"Pretendard", system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", sans-serif;
+    background:var(--bg);
+    color:var(--text);
+  }
+
+  .wrap{
+    max-width:960px;
+    margin:56px auto;
+    padding:0 24px 48px;
+  }
+
+  .header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    margin-bottom:18px;
+  }
+
+  h1{
+    margin:0;
+    font-size:26px;
+    font-weight:900;
+    letter-spacing:-.02em;
+  }
+
+  .subtitle{
+    margin-top:8px;
+    color:var(--muted);
+    font-size:14px;
+  }
+
+  .back{
+    color:var(--brand);
+    text-decoration:none;
+    font-weight:800;
+  }
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:22px;
+    box-shadow:var(--shadow);
+  }
+
+  label{
+    display:block;
+    margin:14px 0 8px;
+    font-weight:800;
+    font-size:14px;
+  }
+
+  textarea,input,select{
+    width:100%;
+    background:#020617;
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:12px;
+    color:var(--text);
+    font-size:14px;
+    outline:none;
+  }
+
+  textarea{
+    min-height:180px;
+    resize:vertical;
+  }
+
+  .row3{
+    display:grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap:12px;
+  }
+
+  @media (max-width: 760px){
+    .row3{ grid-template-columns: 1fr 1fr; }
+    .row3 > div:last-child{ grid-column: 1 / -1; }
+  }
+
+  button{
+    width:100%;
+    margin-top:18px;
+    padding:12px 14px;
+    border:0;
+    border-radius:12px;
+    background:linear-gradient(90deg,#38bdf8,#0ea5e9);
+    color:#020617;
+    font-weight:900;
+    cursor:pointer;
+  }
+
+  button:disabled{
+    opacity:.6;
+    cursor:not-allowed;
+  }
+
+  .hint{
+    margin-top:12px;
+    color:var(--muted);
+    font-size:13px;
+  }
+
+  /* ===== ✅ date input은 브라우저 기본 UI를 살려야 달력이 정상 작동 ===== */
+  input[type="date"]{
+    /* 공통: 기본 UI 유지 */
+    -webkit-appearance: auto !important;
+    appearance: auto !important;
+
+    /* 배경/테두리는 유지하되, 기본 아이콘은 표시되게 */
+    background:#020617;
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:12px;
+
+    /* 다크 모드에서 아이콘/팝업 가독성 */
+    color-scheme: dark;
+
+    cursor:pointer;
+  }
+
+  /* ✅ Chrome/Edge/Whale 계열: 캘린더 아이콘 클릭 가능하게 */
+  input[type="date"]::-webkit-calendar-picker-indicator{
+    opacity:1 !important;
+    display:block !important;
+    cursor:pointer;
+    filter: invert(1); /* 어두운 배경에서 아이콘 보이게 */
+  }
+
+  /* ✅ iOS/Safari는 showPicker 미지원인 경우가 많아 기본 동작이 우선 */
+  /* (따로 막지 않음) */
+
+  /* ===== 그래프 영역 ===== */
+  .charts-grid{
+    margin-top:18px;
+    display:grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap:14px;
+  }
+
+  .chart-panel{
+    background:#0b1220;
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:14px;
+  }
+
+  .chart-canvas-wrap{
+    position:relative;
+    height:260px;
+    margin-top:10px;
+  }
+
+  @media (max-width: 860px){
+    .charts-grid{ grid-template-columns: 1fr; }
+  }
+
+  /* ===== 로딩 ===== */
+  .loading-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(2,6,23,.92);
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    z-index:9999;
+    opacity:0;
+    pointer-events:none;
+    transition:.25s;
+  }
+  .loading-overlay.active{opacity:1; pointer-events:auto;}
+
+  .loader-text{
+    font-size:18px;
+    font-weight:900;
+    color:var(--brand);
+    margin-bottom:18px;
+  }
+
+  .progress-shell{
+    width:min(420px,86vw);
+    padding:14px;
+    border-radius:18px;
+    background:#020617;
+    border:1px solid var(--line);
+  }
+
+  .progress-bar{
+    width:100%;
+    height:12px;
+    background:#020617;
+    border-radius:999px;
+    overflow:hidden;
+  }
+
+  .progress-inner{
+    width:38%;
+    height:100%;
+    background:linear-gradient(90deg,#38bdf8,#0ea5e9);
+    animation:indeterminate 1.1s infinite ease-in-out;
+    transform:translateX(-120%);
+  }
+
+  @keyframes indeterminate{
+    0%{transform:translateX(-120%)}
+    100%{transform:translateX(280%)}
+  }
+  .panel-header{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  /* 제목 줄바꿈 방지 */
+  .panel-header .hint{
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  /* 업체 선택 드롭다운 크기 조절 */
+  #companySelect{
+    width: 140px;        /* 가로 폭 줄이기 */
+    padding: 6px 10px;
+    font-size: 12px;
+    height: 36px;
+  }
+</style>
+</head>
+
+<body>
+<div class="wrap">
+  <div class="header">
+    <div>
+      <h1>네이버 뉴스 수집</h1>
+      <div class="subtitle">업체별 뉴스 개수 · 분류 비율 분석</div>
+    </div>
+    <a href="/" class="back">← Home</a>
+  </div>
+
+  <div class="card">
+    <form id="news-form" method="post" action="{% url 'news_collect' %}">
+      {% csrf_token %}
+
+      <label>기업명 목록</label>
+      <textarea name="companies" required></textarea>
+
+      <div class="row3">
+        <div>
+          <label>시작일</label>
+          <!-- ✅ placeholder는 date에서 보장되진 않지만, 일부 브라우저 fallback에서 도움됨 -->
+          <input id="startDate" type="date" name="start_date" required>
+        </div>
+        <div>
+          <label>종료일</label>
+          <input id="endDate" type="date" name="end_date" required>
+        </div>
+        <div>
+          <label>기업당 최대 기사 수</label>
+          <input type="number" name="max_per_company" value="200">
+        </div>
+      </div>
+
+      <button type="submit">수집 실행 & 엑셀 다운로드</button>
+      <div class="hint">분석 완료 후 하단에 그래프가 표시됩니다.</div>
+    </form>
+  </div>
+
+  <!-- 결과 -->
+  <div class="charts-grid">
+    <div class="chart-panel">
+      <div class="hint">업체별 뉴스 개수</div>
+      <div class="chart-canvas-wrap">
+        <canvas id="barCompany"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-panel">
+      <div class="panel-header">
+        <div class="hint">업체별 분류 비율</div>
+        <select id="companySelect"></select>
+      </div>
+
+      <div class="chart-canvas-wrap">
+        <canvas id="pieCategory"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="loading-overlay" class="loading-overlay">
+  <div class="loader-text">뉴스 수집 및 분석 중…</div>
+  <div class="progress-shell">
+    <div class="progress-bar">
+      <div class="progress-inner"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let barChart = null, pieChart = null;
+
+  // ✅ 달력 강제 오픈: showPicker 지원되는 브라우저에서만
+  function bindDatePicker(el){
+    const tryOpen = (ev) => {
+      // 일부 브라우저에서 click/focus로 showPicker 호출 시 예외 발생 가능
+      try{
+        if (typeof el.showPicker === "function"){
+          // 모바일에서 키보드만 뜨는 걸 방지하기 위해 약간의 조건 처리
+          // (pointer 이벤트에서만 더 자연스럽게 열림)
+          el.showPicker();
+        }
+      }catch(e){
+        // showPicker 불가면 그냥 기본 UI(아이콘 클릭)로 사용
+      }
+    };
+
+    // click/focus 모두 바인딩
+    el.addEventListener("click", tryOpen);
+    el.addEventListener("focus", tryOpen);
+
+    // ✅ Fallback: date가 텍스트처럼만 동작하는 환경에서 사용자가 직접 입력할 수 있게 힌트 제공
+    // (type=date 자체가 지원되면 무시됨)
+    el.addEventListener("keydown", (e) => {
+      // 숫자/대시 허용, 나머지는 사용자가 입력하기 불편하니 막지 않음(브라우저별 이슈 방지)
+    });
+  }
+
+  bindDatePicker(document.getElementById("startDate"));
+  bindDatePicker(document.getElementById("endDate"));
+
+  function renderCharts(data){
+    const companyTotal = data.stats.company_total || {};
+    const companyCategory = data.stats.company_category || {};
+
+    const companies = Object.keys(companyTotal);
+    const counts = companies.map(c => companyTotal[c]);
+
+    if(barChart) barChart.destroy();
+    barChart = new Chart(document.getElementById("barCompany"), {
+      type: "bar",
+      data: {
+        labels: companies,
+        datasets: [{
+          label: "뉴스 개수",
+          data: counts
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true },
+          datalabels: {
+            anchor: "end",
+            align: "end",
+            color: "#e5e7eb",
+            font: { weight: "900", size: 12 },
+            formatter: (v) => v
+          }
+        }
+      },
+      plugins: [ChartDataLabels]
+    });
+
+    const sel = document.getElementById("companySelect");
+    sel.innerHTML = "";
+    companies.forEach(c => {
+      const opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = c;
+      sel.appendChild(opt);
+    });
+
+    function drawPie(company){
+      const cats = companyCategory[company] || {};
+      const labels = Object.keys(cats);
+      const values = labels.map(k => cats[k]);
+      const total = values.reduce((a,b)=>a+b,0);
+
+      if(pieChart) pieChart.destroy();
+      pieChart = new Chart(document.getElementById("pieCategory"), {
+        type: "pie",
+        data: {
+          labels,
+          datasets: [{ data: values }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: "bottom", labels: { color: "#e5e7eb" } },
+            datalabels: {
+              color: "#020617",
+              font: { weight: "900", size: 12 },
+                formatter: (value) => value
+            }
+          }
+        },
+        plugins: [ChartDataLabels]
+      });
+    }
+
+    sel.onchange = () => drawPie(sel.value);
+    if(companies.length) drawPie(companies[0]);
+  }
+
+  document.getElementById("news-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    document.getElementById("loading-overlay").classList.add("active");
+
+    try{
+      const res = await fetch(e.target.action, {
+        method: "POST",
+        body: new FormData(e.target),
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+      });
+
+      if(!res.ok){
+        throw new Error(await res.text());
+      }
+
+      const data = await res.json();
+
+      renderCharts(data);
+
+      if (data.download_url){
+        window.location.href = data.download_url;
+      }else{
+        alert("다운로드 URL이 없습니다. 서버 응답을 확인해 주세요.");
+      }
+    }catch(err){
+      alert(err.message || "오류가 발생했습니다.");
+    }finally{
+      document.getElementById("loading-overlay").classList.remove("active");
+    }
+  });
+</script>
+</body>
+</html>

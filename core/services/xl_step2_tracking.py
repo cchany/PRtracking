@@ -1,11 +1,13 @@
 from io import BytesIO
 from collections import Counter
 from openpyxl import load_workbook
-from openpyxl.chart import PieChart, Reference 
+from openpyxl.chart import PieChart, Reference, Series
 from openpyxl.chart.label import DataLabelList
 import re
+from datetime import datetime, timezone, timedelta
+from openpyxl.styles import Font
 
-BASE_SOURCES = ["CP", "IDC", "OmdiaTV", "DSCC"]
+BASE_SOURCES = ["CP", "트렌드포스", "IDC", "OmdiaTV", "DSCC"]
 
 
 def _find_main_and_work_pairs(wb):
@@ -33,10 +35,10 @@ def _find_main_and_work_pairs(wb):
 
 def _copy_main_to_work(main_ws, work_ws):
     """
-    1. CP_{m}, IDC_{m}, OmdiaTV_{m}, DSCC_{m} 각 시트의 B5:E1000을 복사
+    1. CP_{m}, IDC_{m}, OmdiaTV_{m}, DSCC_{m} 각 시트의 B5:E2000을 복사
     2. CP_{m}_work, ... 각 시트의 C7:F1002에 붙여넣기
     """
-    src_row_start, src_row_end = 5, 1000
+    src_row_start, src_row_end = 5, 2000
     src_col_start = 2  # B
     dst_row_start = 7
     dst_col_start = 3  # C
@@ -140,17 +142,20 @@ def _update_tier_table_if_needed(wb, work_ws):
         row += 1
 
 
-
-
 def _fill_categories_and_counts(main_ws, work_ws):
     """
     4. 원본 시트의 카테고리(G5:G800)를 읽어
        - 중복 제거된 카테고리 리스트를 L7:L...에 채우고
        - 각 카테고리 건수를 K열에 적음
     """
+    # 기존 카테고리/건수 영역 초기화 (잔여 값 제거)
+    for r in range(7, 2000):
+        work_ws.cell(row=r, column=11, value=None)  # K
+        work_ws.cell(row=r, column=12, value=None)  # L
+
     # 원본 시트에서 카테고리 전체 목록 + 빈값 제외
     categories = []
-    for r in range(5, 801):
+    for r in range(5, 2000):
         val = main_ws.cell(row=r, column=7).value  # G
         if val is None or str(val).strip() == "":
             continue
@@ -173,16 +178,19 @@ def _fill_categories_and_counts(main_ws, work_ws):
         work_ws.cell(row=row, column=11, value=freq.get(cat)) # K
         row += 1
 
-    # 필요시 이후 영역 정리(선택 사항): 여기서는 그냥 덮어쓰기만 함
-
 
 def _sort_counts_to_MN(work_ws):
     """
     5. K7:L800 → 건수/카테고리 데이터를 읽어
        M7:N800에 '건수 기준 내림차순'으로 재정렬된 결과를 채운다.
     """
+    # 기존 정렬 영역 초기화 (잔여 값 제거)
+    for r in range(7, 2000):
+        work_ws.cell(row=r, column=13, value=None)  # M
+        work_ws.cell(row=r, column=14, value=None)  # N
+
     rows = []
-    for r in range(7, 801):
+    for r in range(7, 2000):
         count = work_ws.cell(row=r, column=11).value  # K
         cat = work_ws.cell(row=r, column=12).value    # L
         if cat is None or str(cat).strip() == "":
@@ -220,6 +228,12 @@ def _prepare_chart_area(work_ws):
         · 레이블 텍스트는 셀 값(= "n건") 사용
         · 색상 팔레트/스타일은 템플릿에서 지정한 그대로 유지
     """
+    # 기존 차트 데이터 영역 초기화 (잔여 값/서식 제거)
+    for r in range(7, 16):
+        work_ws.cell(row=r, column=16, value=None)  # P
+        q_cell = work_ws.cell(row=r, column=17, value=None)  # Q
+        q_cell.number_format = "General"
+
     # 1) 상위 8개 복사 (M/N -> P/Q)
     for r in range(7, 15):
         cat = work_ws.cell(row=r, column=14).value  # N 열: 카테고리
@@ -271,91 +285,196 @@ def _prepare_chart_area(work_ws):
 
         # 데이터 레이블 옵션: 값 + 지시선 표시
         dl = DataLabelList()
-        dl.showVal = True                 # 값
-        dl.showLeaderLines = True         # 지시선 표시
-        dl.showPercent = False            # 퍼센트
-        dl.showLegendKey = False          # 범례 키
-        dl.showCatName = False            # 항목 이름
-        dl.showSerName = False            # 계열 이름
-        dl.showBubbleSize = False         # 버블 크기(버블차트용)
-        dl.showRange = False              # 데이터 범위 라벨
-        dl.showLabel = False              # (일반 텍스트 라벨)
+        dl.showVal = True
+        dl.showLeaderLines = True
+        dl.showPercent = False
+        dl.showLegendKey = False
+        dl.showCatName = False
+        dl.showSerName = False
+        dl.showBubbleSize = False
+        dl.showRange = False
+        dl.showLabel = False
         ch.dataLabels = dl
 
         break  # 첫 번째 PieChart만 처리
 
+
+def _seoul_now_year_month():
+    # Asia/Seoul = UTC+9 (고정 오프셋로 처리)
+    now = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=9)))
+    return now.year, now.month
+
+
+def _calc_year_month_row(year: int, month: int, base_year: int = 2020, base_row: int = 29) -> int:
+    """
+    C29=2020년 1월, C30=2020년 2월 ... 규칙 기반 행 계산
+    row = base_row + (year-base_year)*12 + (month-1)
+    """
+    return base_row + (year - base_year) * 12 + (month - 1)
+
+
+def _seoul_now_year_month():
+    # Asia/Seoul = UTC+9 (고정 오프셋)
+    now = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=9)))
+    return now.year, now.month
+
+
+def _calc_year_month_row(year: int, month: int, base_year: int = 2020, base_row: int = 29) -> int:
+    """
+    C29=2020년 1월, C30=2020년 2월 ... 규칙 기반 행 계산
+    row = base_row + (year-base_year)*12 + (month-1)
+    """
+    return base_row + (year - base_year) * 12 + (month - 1)
+
+
 def _update_month_summary_sheet(wb):
     """
     '{m}월 총평' 시트가 있으면,
-    D5:D8, E5:E8, F5:F8, G5:G8 수식을 채워 넣는다.
-
-    D5:D8: =CP_{m}_work!F2  / =IDC_{m}_work!F2 / =OmdiaTV_{m}_work!F2 / =DSCC_{m}_work!F2
-    E5:E8: =COUNTIF(각 *_work!D5:D1048576,"연합뉴스")
-    F5:F8: =각 *_work!F3
-    G5:G8: =각 *_work!F4
+    1) D5:D8, E5:E8, F5:F8, G5:G8 수식을 채워 넣고
+    2) Chart1 데이터 범위를 강제 지정한다.
+    3) B24:G136 테이블에서 '이번 달(현재 년/월)' 행을 찾아
+       D~G에 (CP/IDC/OmdiaTV/DSCC) 총 게재 수를 자동 기록한다. (=D5~D8 링크)
+    4) 이번달 vs 전월 게재 수 차이를 J24:M24에 기록(빨강+bold)한다.
+    5) Chart2 데이터 범위를 '작년 1월 ~ 이번달'로 강제 지정한다.
+       - categories: C(작년1월) ~ C(이번달)
+       - series: D~G (계열명은 D24:G24 고정)
     """
+
     summary_ws = None
     month_num = None
 
     # 1) '{m}월 총평' 시트 찾기
     for name in wb.sheetnames:
-        m = re.match(r"^(\d{1,2})\s*월\s*총평$", str(name).strip())
-        if m:
+        mm = re.match(r"^(\d{1,2})\s*월\s*총평$", str(name).strip())
+        if mm:
             summary_ws = wb[name]
-            month_num = int(m.group(1))
+            month_num = int(mm.group(1))
             break
 
     if summary_ws is None or month_num is None:
-        return  # 총평 시트가 없으면 스킵
+        return
 
     m = month_num
-    # 우리가 쓰는 시트 이름 패턴(소문자 work 기준)
+
     sources = [
         ("CP",      f"CP_{m}_work"),
+        ("트렌드포스",f"트렌드포스_{m}_work"),
         ("IDC",     f"IDC_{m}_work"),
         ("OmdiaTV", f"OmdiaTV_{m}_work"),
         ("DSCC",    f"DSCC_{m}_work"),
     ]
 
+    # =========================
+    # 1) 총평 표 수식 채우기
+    # =========================
     start_row = 5
-    for idx, (label, sheet_name) in enumerate(sources):
+    for idx, (_label, sheet_name) in enumerate(sources):
         row = start_row + idx
 
-        # 해당 *_work 시트가 실제로 있지 않으면 건너뜀
         if sheet_name not in wb.sheetnames:
             continue
 
-        # D5:D8 = *_work!F2
-        summary_ws.cell(row=row, column=4).value = f"={sheet_name}!F2"
+        summary_ws.cell(row=row, column=4).value = f"={sheet_name}!F2"  # D
+        summary_ws.cell(row=row, column=5).value = f'=COUNTIF({sheet_name}!D5:D1048576,"연합뉴스")'  # E
+        summary_ws.cell(row=row, column=6).value = f"={sheet_name}!F3"  # F
+        summary_ws.cell(row=row, column=7).value = f"={sheet_name}!F4"  # G
 
-        # E5:E8 = COUNTIF(*_work!D5:D1048576,"연합뉴스")
-        summary_ws.cell(row=row, column=5).value = (
-            f'=COUNTIF({sheet_name}!D5:D1048576,"연합뉴스")'
-        )
+    # =========================
+    # 2) 차트 목록
+    # =========================
+    charts = getattr(summary_ws, "_charts", None) or []
 
-        # F5:F8 = *_work!F3
-        summary_ws.cell(row=row, column=6).value = f"={sheet_name}!F3"
+    # =========================
+    # 3) Chart1 데이터 범위 지정
+    # =========================
+    if len(charts) >= 1:
+        try:
+            chart1 = charts[0]
 
-        # G5:G8 = *_work!F4
-        summary_ws.cell(row=row, column=7).value = f"={sheet_name}!F4"
+            categories = Reference(summary_ws, min_col=3, min_row=12, max_row=16)  # C12:C16
+            data = Reference(summary_ws, min_col=4, min_row=11, max_col=5, max_row=16)  # D11:E16
+        
 
+            chart1.series = []
+            chart1.add_data(data, titles_from_data=True)
+            chart1.set_categories(categories)
+        except Exception:
+            pass
 
+    # =========================
+    # 4) 이번달 행 계산 + 값 링크 입력
+    # =========================
+    year, month = _seoul_now_year_month()
+    target_row = _calc_year_month_row(year, month, base_year=2020, base_row=28)
+    prev_row = target_row - 1
+
+    # D~G: 이번달 값은 D5~D8 링크
+    summary_ws[f"D{target_row}"].value = "=D5"  # CP
+    summary_ws[f"E{target_row}"].value = "=D6"  # 트렌드포스
+    summary_ws[f"F{target_row}"].value = "=D7"  # IDC
+    summary_ws[f"G{target_row}"].value = "=D8"  # OmdiaTV
+    summary_ws[f"H{target_row}"].value = "=D9"  # DSCC
+
+    # =========================
+    # 5) 증감 계산 (J24:N24) + 서식(빨강/bold)
+    #    전월 셀이 비어있어도 에러 안 나게 IFERROR 처리
+    # =========================
+    red_bold = Font(color="FF0000", bold=True)
+
+    summary_ws["J24"].value = f"=IFERROR(D{target_row}-D{prev_row}, D{target_row})"
+    summary_ws["K24"].value = f"=IFERROR(E{target_row}-E{prev_row}, E{target_row})"
+    summary_ws["L24"].value = f"=IFERROR(F{target_row}-F{prev_row}, F{target_row})"
+    summary_ws["M24"].value = f"=IFERROR(G{target_row}-G{prev_row}, G{target_row})"
+    summary_ws["N24"].value = f"=IFERROR(H{target_row}-H{prev_row}, H{target_row})"
+
+    for addr in ("J24", "K24", "L24", "M24", "N24"):
+        summary_ws[addr].font = red_bold
+
+    for r in range(start_row, target_row + 1):
+        c = summary_ws.cell(row=r, column=3)  # C열
+        c.number_format = '0"월"'
+
+    # =========================
+    # 6) Chart2 데이터 범위 지정: 작년 1월 ~ 이번달
+    # =========================
+    if len(charts) >= 2:
+        try:
+            chart2 = charts[1]
+
+            start_row = _calc_year_month_row(year - 1, 1, base_year=2020, base_row=29)
+
+            # (선택) C열을 "n월"로 보이게 서식 지정
+            for r in range(start_row, target_row + 1):
+                summary_ws.cell(row=r, column=3).number_format = '0"월"'  # C열
+
+            # categories: C(start)~C(target)
+            cat_ref = Reference(
+                summary_ws,
+                min_col=3,  # C
+                min_row=start_row,
+                max_row=target_row,
+            )
+
+            # ✅ 중요: series 먼저 만들고, categories는 마지막에 설정
+            chart2.series = []
+
+            for col in range(4, 8):  # D(4)~G(7)
+                values = Reference(
+                    summary_ws,
+                    min_col=col,
+                    min_row=start_row,
+                    max_row=target_row,
+                )
+                title = summary_ws.cell(row=24, column=col).value  # D24:G24 고정
+                chart2.series.append(Series(values, title=title))
+
+            # ✅ 마지막에 카테고리 세팅해야 모든 시리즈에 적용됨
+            chart2.set_categories(cat_ref)
+
+        except Exception:
+            pass
 
 def process_tracking_from_work(checked_bytes: bytes) -> bytes:
-    """
-    Step 2 메인 엔트리.
-
-    입력: Step1 결과 + 검수/보정이 끝난 '월 PR 분석' 워크북 바이너리
-    처리:
-      1) 각 소스별 원본 시트 → _work 시트로 B5:E1000 → C7:F1002 복사
-      2) _work 시트에서 Tier Table 불일치 시 신규 언론사 후보 추가
-      3) 원본 시트 카테고리(G열) 기반으로 _work 시트의 K/L 열에
-         [카테고리별 건수 테이블] 생성
-      4) 건수 기준 내림차순 정렬 결과를 M/N 열에 생성
-      5) 원그래프용 상위 카테고리 & 기타 영역을 P/Q 열에 준비
-
-    출력: 수정된 워크북 바이너리 (동일 파일 구조, 내용만 갱신)
-    """
     wb = load_workbook(BytesIO(checked_bytes), data_only=False)
 
     for main_name, work_name in _find_main_and_work_pairs(wb):

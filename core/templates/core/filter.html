@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <title>Research Portal (Single HTML)</title>
+</head>
+
+<body class="bg-white text-slate-900">
+  <!-- Top Nav -->
+  <header class="border-b bg-white">
+    <div class="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
+      <div class="text-xl font-semibold text-red-600">Counterpoint</div>
+      <nav class="hidden md:flex gap-6 text-sm text-slate-700">
+        <a href="#" class="hover:text-slate-900">COVERAGE</a>
+        <a href="#" class="hover:text-slate-900">ABOUT</a>
+        <a href="#" class="hover:text-slate-900">INSIGHTS</a>
+        <a href="#" class="hover:text-slate-900 font-semibold">RESEARCH PORTAL</a>
+        <a href="#" class="hover:text-slate-900">CONTACT US</a>
+      </nav>
+      <div class="flex gap-3 text-sm text-slate-600 items-center">
+        <a href="#">LOGOUT</a>
+        <a href="#">MYPAGE</a>
+        <span class="text-slate-300">|</span>
+        <span>ENG</span>
+      </div>
+    </div>
+
+    <!-- Top Search bar (moved up) -->
+    <div class="border-t bg-white">
+      <div class="mx-auto max-w-6xl px-4 py-3 flex flex-col md:flex-row md:items-center gap-3">
+        <div class="flex items-center gap-2">
+          <button class="h-9 rounded-md border px-3 text-sm text-slate-700 hover:bg-slate-50">Author</button>
+        </div>
+
+        <div class="flex-1">
+          <div class="relative">
+            <input id="topSearchInput"
+                   class="w-full h-9 rounded-md border bg-white pl-3 pr-10 text-sm"
+                   placeholder="AI360 Weekly Pulse – Model Adoption Trends" />
+            <button id="topSearchBtn"
+                    class="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-9 rounded hover:bg-slate-50 text-slate-500"
+                    aria-label="Search">
+              <svg viewBox="0 0 24 24" class="h-4 w-4 mx-auto" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 21l-4.3-4.3" />
+                <circle cx="11" cy="11" r="7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Related searches row -->
+      <div class="mx-auto max-w-6xl px-4 py-2 flex items-center gap-2 overflow-x-auto">
+        <div class="text-xs text-slate-500 whitespace-nowrap mr-1">Related searches</div>
+        <button class="chip">Emerging technologies</button>
+        <button class="chip">Component Tracker</button>
+        <button class="chip">Country Reports</button>
+        <button class="chip">Individual reports</button>
+        <button class="chip">Industry Beats</button>
+        <button class="chip">Monthly Market Pulse</button>
+        <button class="chip">Monthly Market</button>
+      </div>
+    </div>
+  </header>
+
+  <style>
+    .chip{
+      border:1px solid rgb(226 232 240);
+      background:white;
+      border-radius:9999px;
+      padding:.25rem .55rem;
+      font-size:.72rem;
+      color:rgb(51 65 85);
+      white-space:nowrap;
+    }
+    .chip:hover{background:rgb(248 250 252);}
+  </style>
+
+
+
+  <!-- Main -->
+  <main class="mx-auto max-w-6xl px-4 py-8">
+    <div class="grid grid-cols-12 gap-6">
+      <!-- Left Filter (UNCHANGED) -->
+      <aside class="col-span-12 md:col-span-3">
+        <div class="text-2xl font-semibold mb-3">Filter</div>
+
+        <div class="rounded-xl border bg-white overflow-hidden">
+          <div class="px-4 py-3 bg-slate-900 text-white font-semibold text-sm">
+            Report Filter
+          </div>
+
+          <div class="p-3 space-y-3" id="filterRoot"></div>
+
+          <div class="p-3 border-t">
+            <button id="clearAllBtn"
+                    class="inline-flex w-full justify-center rounded-lg border px-3 py-2 text-sm font-semibold hover:bg-slate-50">
+              Clear all
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Right Content -->
+      <section class="col-span-12 md:col-span-9">
+        <!-- Query headline + selected chips (optional visual like screenshot) -->
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="text-lg font-semibold leading-6">
+              These are the results for AI360 Weekly Pulse – Model Adoption Trends
+            </div>
+            <div id="selectedChips" class="mt-3 flex flex-wrap gap-2"></div>
+          </div>
+        </div>
+
+
+        <!-- Tabs -->
+        <div class="mt-5 flex items-center justify-end gap-4 text-sm">
+          <button data-access="all" class="tab px-3 py-1 rounded-md">All</button>
+          <button data-access="subscription" class="tab px-3 py-1 rounded-md">Subscription</button>
+          <button data-access="complimentary" class="tab px-3 py-1 rounded-md">Complimentary</button>
+        </div>
+
+        <div class="mt-6 text-sm text-slate-600"><span id="totalCount">0</span> result</div>
+
+        <!-- Results -->
+        <div class="mt-4 space-y-6" id="resultsRoot"></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    /******************************
+     * 1) Filter tree (your spec)
+     ******************************/
+    const FILTER_TREE = [
+      {
+        key: "publication_type",
+        label: "Publication Type",
+        children: [
+          "Reports",
+          "Research Briefs & Blogs",
+          "CP Conversations",
+          "Data",
+          "Events & Webinars",
+          "Podcasts",
+          "Reviews",
+          "White Papers",
+          "In the Press",
+          "CP Conferences",
+        ],
+      },
+      {
+        key: "coverage",
+        label: "Coverage",
+        children: [
+          { label: "AI", children: ["AI360"] },
+          { label: "Automotive", children: ["Autonomous Vehicle", "Connected Car", "Electric Vehicle", "NAD", "TCU"] },
+          { label: "Consumer Electronics", children: ["PC", "Tablet", "TV"] },
+          { label: "Display", children: [
+            "Display Capex/Equipment",
+            "Display Fab Utilization",
+            "Display Market/Trends",
+            "Display Materials",
+            "Display Technologies",
+            "IT Displays",
+            "Smartphone Displays",
+            "TV Displays",
+            "XR Displays",
+            "Advanced Semiconductor Packaging",
+            "Automotive Displays",
+            "Smartwatch Displays",
+          ]},
+          { label: "eSIM", children: ["eSIM Service"] },
+          { label: "IoT & cIoT", children: ["IoT Cellular and Module", "Smart Home"] },
+          { label: "Location Platform", children: ["Location Platform Service"] },
+          { label: "Macro & Geopolitics", children: ["Macro Service"] },
+          { label: "Manufacturing", children: ["ODM/IDM", "Make in India", "Make in Vietnam", "Manufacturing Supply Chain and Ecosystem"] },
+          { label: "Networks", children: ["5G Networks", "FWA", "WiFi Gateways 360"] },
+          { label: "Semiconductors", children: ["Foundry", "Memory", "Smartphone SoC", "Teardown & BOM", "Camera Sensor"] },
+          { label: "Smartphones", children: ["Smartphone 360", "Smartphone Model Tracker", "Apple 360", "Secondary Smartphone", "Foldable Smartphone"] },
+          { label: "Wearables", children: ["Smartwatch 360", "TWS 360", "XR 360"] },
+        ],
+      },
+      {
+        key: "geography",
+        label: "Geography",
+        children: [
+          "Asia",
+          "China",
+          "Eastern Europe",
+          "Global",
+          "India",
+          "Latin America",
+          "Middle East & Africa",
+          "Southeast Asia",
+          "US",
+          "Western Europe",
+        ],
+      },
+      {
+        key: "time_period",
+        label: "Time period",
+        children: ["WEEKLY", "MONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY", "OTHER"],
+      },
+      {
+        key: "other",
+        label: "Others",
+        children: ["Industry Beats", "Individual reports"],
+      },
+    ];
+
+    /******************************
+     * 2) Demo dataset (replace later)
+     ******************************/
+    const DATA = [
+      {
+        id: 1,
+        title: "China Automotive Policy Insight 2026",
+        overview: "Summarizes national-level policies and regulations focusing on NEV, C-V2X, connected vehicles, AI and automotive chips.",
+        published_at: "2026-01-30",
+        access: "all",
+        publication_type: "Reports",
+        coverage: "Automotive",
+        coverage_sub: "Connected Car",
+        geography: "China",
+        time_period: "YEARLY",
+        other: "Industry Beats",
+        tag1: "Report",
+        tag2: "Automotive"
+      },
+      {
+        id: 2,
+        title: "AI360 Weekly Pulse – Model Adoption Trends",
+        overview: "Tracks weekly adoption of AI models across devices and cloud ecosystems.",
+        published_at: "2026-01-24",
+        access: "subscription",
+        publication_type: "Reports",
+        coverage: "AI",
+        coverage_sub: "AI360",
+        geography: "Global",
+        time_period: "WEEKLY",
+        other: "",
+        tag1: "Report",
+        tag2: "AI"
+      },
+      {
+        id: 3,
+        title: "Display Market/Trends – Quarterly Outlook",
+        overview: "Quarterly outlook on display market trends, utilization and pricing dynamics.",
+        published_at: "2026-01-05",
+        access: "subscription",
+        publication_type: "Research Briefs & Blogs",
+        coverage: "Display",
+        coverage_sub: "Display Market/Trends",
+        geography: "Asia",
+        time_period: "QUARTERLY",
+        other: "Individual reports",
+        tag1: "Brief",
+        tag2: "Display"
+      },
+      {
+        id: 4,
+        title: "eSIM Service Landscape – US",
+        overview: "Competitive landscape of eSIM services and carrier strategies in the US.",
+        published_at: "2025-12-18",
+        access: "complimentary",
+        publication_type: "White Papers",
+        coverage: "eSIM",
+        coverage_sub: "eSIM Service",
+        geography: "US",
+        time_period: "OTHER",
+        other: "",
+        tag1: "White Paper",
+        tag2: "eSIM"
+      },
+      {
+        id: 5,
+        title: "Smartphone 360 – Market Monitor Standard",
+        overview: "Monthly monitoring of smartphone shipments, ASP and vendor performance.",
+        published_at: "2026-01-10",
+        access: "subscription",
+        publication_type: "Reports",
+        coverage: "Smartphones",
+        coverage_sub: "Smartphone 360",
+        geography: "Global",
+        time_period: "MONTHLY",
+        other: "",
+        tag1: "Report",
+        tag2: "Smartphones"
+      },
+      {
+        id: 6,
+        title: "Foundry Tracker – Capacity and Pricing",
+        overview: "Update on foundry capacity, utilization and pricing trends by node.",
+        published_at: "2025-11-28",
+        access: "all",
+        publication_type: "Data",
+        coverage: "Semiconductors",
+        coverage_sub: "Foundry",
+        geography: "Global",
+        time_period: "MONTHLY",
+        other: "",
+        tag1: "Data",
+        tag2: "Semiconductors"
+      },
+    ];
+
+    /******************************
+     * 3) State
+     ******************************/
+    const state = {
+      q: "",
+      sort: "title",
+      access: "all",
+      selected: {
+        publication_type: new Set(),
+        coverage: new Set(),
+        coverage_sub: new Set(),
+        geography: new Set(),
+        time_period: new Set(),
+        other: new Set(),
+      },
+      // 1-depth accordion open state
+      accOpen: new Set(["publication_type", "coverage"]),
+      // 3-depth (coverage sub) dropdown open state (per coverage parent)
+      covOpen: new Set(["AI", "Automotive", "Consumer Electronics"]), // initial open examples
+    };
+
+    /******************************
+     * 4) Helpers
+     ******************************/
+    const $ = (sel, root=document) => root.querySelector(sel);
+    const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+    const escapeHtml = (s) => String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    const safeId = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g,"");
+
+    function isChecked(key, value) {
+      return state.selected[key]?.has(value);
+    }
+
+    function setChecked(key, value, checked) {
+      if (!state.selected[key]) return;
+      if (checked) state.selected[key].add(value);
+      else state.selected[key].delete(value);
+    }
+
+    /******************************
+     * 5) Render Filters (UNCHANGED)
+     ******************************/
+    function renderFilters() {
+      const root = $("#filterRoot");
+      root.innerHTML = "";
+
+      FILTER_TREE.forEach(group => {
+        const isOpen = state.accOpen.has(group.key);
+
+        const box = document.createElement("div");
+        box.className = "rounded-xl border bg-white overflow-hidden";
+
+        // header
+        const header = document.createElement("button");
+        header.type = "button";
+        header.className = "w-full flex items-center justify-between px-3 py-3 bg-white hover:bg-slate-50";
+        header.innerHTML = `
+          <div class="text-sm font-semibold truncate">${escapeHtml(group.label)}</div>
+          <svg class="w-4 h-4 text-slate-500 transition-transform ${isOpen ? "rotate-180" : ""}" viewBox="0 0 20 20" fill="none">
+            <path d="M5 7l5 6 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        `;
+        header.addEventListener("click", () => {
+          if (state.accOpen.has(group.key)) state.accOpen.delete(group.key);
+          else state.accOpen.add(group.key);
+          renderFilters();
+        });
+
+        const panel = document.createElement("div");
+        panel.className = `px-3 pb-3 ${isOpen ? "" : "hidden"}`;
+
+        // body
+        if (group.key !== "coverage") {
+          const list = document.createElement("div");
+          list.className = "pt-2 space-y-2";
+
+          group.children.forEach(item => {
+            const id = `${group.key}-${safeId(item)}`;
+            const row = document.createElement("label");
+            row.className = "flex items-center gap-2 text-sm text-slate-700";
+            row.innerHTML = `
+              <input id="${escapeHtml(id)}" class="h-4 w-4" type="checkbox" ${isChecked(group.key, item) ? "checked" : ""}/>
+              <span class="truncate">${escapeHtml(item)}</span>
+            `;
+            const input = row.querySelector("input");
+            input.addEventListener("change", (e) => {
+              setChecked(group.key, item, e.target.checked);
+              applyAndRender();
+            });
+            list.appendChild(row);
+          });
+
+          panel.appendChild(list);
+        } else {
+          // Coverage: 2-depth parents + 3-depth dropdown subs
+          const list = document.createElement("div");
+          list.className = "pt-2 space-y-2 bg-slate-50 rounded-lg p-2";
+
+          group.children.forEach(cov => {
+            const covName = cov.label;
+            const covKey = safeId(covName);
+            const subValues = cov.children || [];
+            const parentId = `coverage_${covKey}`;
+
+            // compute sub selection state
+            const checkedSubs = subValues.filter(s => isChecked("coverage_sub", s)).length;
+            const allSubsChecked = subValues.length > 0 && checkedSubs === subValues.length;
+            const anySubsChecked = checkedSubs > 0;
+
+            // keep parent checked if any sub checked (sync)
+            if (anySubsChecked) state.selected.coverage.add(covName);
+
+            const itemWrap = document.createElement("div");
+            itemWrap.className = "rounded-md bg-white border";
+
+            const topRow = document.createElement("div");
+            topRow.className = "flex items-center justify-between px-2 py-2";
+
+            const left = document.createElement("label");
+            left.className = "flex items-center gap-2 text-sm font-semibold text-slate-800 min-w-0";
+            left.innerHTML = `
+              <input id="${escapeHtml(parentId)}" class="h-4 w-4" type="checkbox" ${isChecked("coverage", covName) ? "checked" : ""}/>
+              <span class="truncate">${escapeHtml(covName)}</span>
+            `;
+
+            const parentInput = left.querySelector("input");
+            // set indeterminate (some subs selected)
+            setTimeout(() => {
+              parentInput.indeterminate = (subValues.length > 0 && anySubsChecked && !allSubsChecked);
+            }, 0);
+
+            parentInput.addEventListener("change", (e) => {
+              const checked = e.target.checked;
+              setChecked("coverage", covName, checked);
+
+              // parent unchecked => clear its subs
+              if (!checked && subValues.length) {
+                subValues.forEach(s => state.selected.coverage_sub.delete(s));
+              }
+              applyAndRender();
+            });
+
+            // dropdown toggle for 3-depth
+            const hasSubs = subValues.length > 0;
+            const isSubOpen = state.covOpen.has(covName);
+
+            const toggleBtn = document.createElement("button");
+            toggleBtn.type = "button";
+            toggleBtn.className = `ml-2 p-1 rounded hover:bg-slate-100 ${hasSubs ? "" : "opacity-40 cursor-not-allowed"}`;
+            toggleBtn.innerHTML = `
+              <svg class="w-4 h-4 text-slate-600 transition-transform ${isSubOpen ? "rotate-180" : ""}" viewBox="0 0 20 20" fill="none">
+                <path d="M5 7l5 6 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            `;
+            toggleBtn.addEventListener("click", () => {
+              if (!hasSubs) return;
+              if (state.covOpen.has(covName)) state.covOpen.delete(covName);
+              else state.covOpen.add(covName);
+              renderFilters(); // only re-render filters
+            });
+
+            topRow.appendChild(left);
+            topRow.appendChild(toggleBtn);
+
+            // subs panel (3rd depth)
+            const subsPanel = document.createElement("div");
+            subsPanel.className = `px-2 pb-2 ${hasSubs && isSubOpen ? "" : "hidden"}`;
+
+            if (hasSubs) {
+              const subs = document.createElement("div");
+              subs.className = "ml-6 mt-1 space-y-2";
+
+              subValues.forEach(sub => {
+                const subId = `coverage_sub_${covKey}_${safeId(sub)}`;
+                const subRow = document.createElement("label");
+                subRow.className = "flex items-center gap-2 text-sm text-slate-700";
+                subRow.innerHTML = `
+                  <input id="${escapeHtml(subId)}" class="h-4 w-4" type="checkbox" ${isChecked("coverage_sub", sub) ? "checked" : ""}/>
+                  <span class="truncate">${escapeHtml(sub)}</span>
+                `;
+                const subInput = subRow.querySelector("input");
+                subInput.addEventListener("change", (e) => {
+                  const checked = e.target.checked;
+                  setChecked("coverage_sub", sub, checked);
+
+                  // sub checked => auto-check parent
+                  if (checked) state.selected.coverage.add(covName);
+
+                  applyAndRender();
+                });
+
+                subs.appendChild(subRow);
+              });
+
+              subsPanel.appendChild(subs);
+            }
+
+            itemWrap.appendChild(topRow);
+            itemWrap.appendChild(subsPanel);
+            list.appendChild(itemWrap);
+          });
+
+          panel.appendChild(list);
+        }
+
+        box.appendChild(header);
+        box.appendChild(panel);
+        root.appendChild(box);
+      });
+    }
+
+    /******************************
+     * Extra: Selected chips (visual only)
+     ******************************/
+    function renderSelectedChips() {
+      const root = $("#selectedChips");
+      if (!root) return;
+
+      const chips = [];
+
+      // show selected coverage + geo as demo chips
+      state.selected.coverage.forEach(v => chips.push({ key: "coverage", value: v }));
+      state.selected.geography.forEach(v => chips.push({ key: "geography", value: v }));
+      state.selected.other.forEach(v => chips.push({ key: "other", value: v }));
+
+      if (!chips.length) {
+        root.innerHTML = "";
+        return;
+      }
+
+      root.innerHTML = chips.map(c => `
+        <button class="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded-full hover:bg-slate-200"
+                data-chip-key="${escapeHtml(c.key)}" data-chip-value="${escapeHtml(c.value)}">
+          ${escapeHtml(c.value)} <span class="ml-1 text-slate-400">×</span>
+        </button>
+      `).join("");
+
+      // click chip to remove
+      $$("button[data-chip-key]", root).forEach(btn => {
+        btn.addEventListener("click", () => {
+          const k = btn.dataset.chipKey;
+          const v = btn.dataset.chipValue;
+          if (state.selected[k]) state.selected[k].delete(v);
+          applyAndRender();
+        });
+      });
+    }
+
+    /******************************
+     * 6) Filtering + Sorting
+     ******************************/
+    function applyFilters(raw) {
+      let list = raw.slice();
+
+      // access tab
+      if (state.access !== "all") {
+        list = list.filter(r => r.access === state.access);
+      }
+
+      // search q
+      const q = state.q.trim().toLowerCase();
+      if (q) {
+        list = list.filter(r =>
+          (r.title || "").toLowerCase().includes(q) ||
+          (r.overview || "").toLowerCase().includes(q)
+        );
+      }
+
+      // multi-select groups
+      const s = state.selected;
+
+      if (s.publication_type.size) list = list.filter(r => s.publication_type.has(r.publication_type));
+      if (s.geography.size) list = list.filter(r => s.geography.has(r.geography));
+      if (s.time_period.size) list = list.filter(r => s.time_period.has(r.time_period));
+      if (s.other.size) list = list.filter(r => s.other.has(r.other));
+
+      // Coverage logic:
+      // - If coverage_sub selected => allow only those subs
+      // - Else if coverage selected => filter by coverage
+      if (s.coverage_sub.size) {
+        list = list.filter(r => s.coverage_sub.has(r.coverage_sub));
+      } else if (s.coverage.size) {
+        list = list.filter(r => s.coverage.has(r.coverage));
+      }
+
+      // sort
+      if (state.sort === "title") {
+        list.sort((a,b) => (a.title||"").localeCompare(b.title||""));
+      } else if (state.sort === "published_at_desc") {
+        list.sort((a,b) => String(b.published_at||"").localeCompare(String(a.published_at||"")));
+      }
+
+      return list;
+    }
+
+    /******************************
+     * 7) Render Results
+     ******************************/
+    function renderResults(list) {
+      $("#totalCount").textContent = String(list.length);
+
+      const root = $("#resultsRoot");
+      root.innerHTML = "";
+
+      if (!list.length) {
+        root.innerHTML = `
+          <div class="rounded-xl border bg-white p-6 text-slate-600">
+            No results.
+          </div>
+        `;
+        return;
+      }
+
+      list.forEach(r => {
+        const item = document.createElement("article");
+        item.className = "border-b pb-6";
+
+        item.innerHTML = `
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              ${r.tag1 ? `<span class="text-xs bg-slate-100 px-2 py-1 rounded-full">${escapeHtml(r.tag1)}</span>` : ""}
+              ${r.tag2 ? `<span class="text-xs bg-slate-100 px-2 py-1 rounded-full">${escapeHtml(r.tag2)}</span>` : ""}
+            </div>
+            <div class="text-xs text-slate-400">${escapeHtml(r.access)}</div>
+          </div>
+
+          <div class="mt-2 text-xl font-bold">${escapeHtml(r.title)}</div>
+          <p class="mt-2 text-sm text-slate-700 leading-6">${escapeHtml(r.overview)}</p>
+
+          <div class="mt-2 text-xs text-slate-400">
+            ${escapeHtml(r.published_at || "")}
+          </div>
+
+          <div class="mt-3 text-xs text-slate-500">
+            <span class="mr-2"><b>Publication:</b> ${escapeHtml(r.publication_type || "-")}</span>
+            <span class="mr-2"><b>Coverage:</b> ${escapeHtml(r.coverage || "-")}</span>
+            <span class="mr-2"><b>Sub:</b> ${escapeHtml(r.coverage_sub || "-")}</span>
+            <span class="mr-2"><b>Geo:</b> ${escapeHtml(r.geography || "-")}</span>
+            <span class="mr-2"><b>Period:</b> ${escapeHtml(r.time_period || "-")}</span>
+            <span class="mr-2"><b>Other:</b> ${escapeHtml(r.other || "-")}</span>
+          </div>
+        `;
+        root.appendChild(item);
+      });
+    }
+
+    /******************************
+     * 8) Tabs
+     ******************************/
+    function renderTabs() {
+      $$(".tab").forEach(btn => {
+        const key = btn.dataset.access;
+        const active = (key === state.access);
+        btn.className =
+          "tab px-3 py-1 rounded-md " +
+          (active ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-800");
+      });
+    }
+
+    /******************************
+     * 9) Query Echo
+     ******************************/
+    function renderQueryEcho() {
+      const el = $("#queryEcho");
+      if (!el) return;
+      el.textContent = state.q || $("#searchInput")?.value || "";
+    }
+
+    /******************************
+     * 10) Orchestration
+     ******************************/
+    function applyAndRender() {
+      renderTabs();
+      renderFilters();           // keep filter behavior
+      renderSelectedChips();     // visual only
+      renderQueryEcho();
+      const filtered = applyFilters(DATA);
+      renderResults(filtered);
+    }
+
+    /******************************
+     * 11) Wire up inputs
+     ******************************/
+    function init() {
+      // initial render
+      renderTabs();
+      renderFilters();
+      renderSelectedChips();
+      renderQueryEcho();
+      renderResults(applyFilters(DATA));
+
+      // sort
+      $("#sortSelect").addEventListener("change", (e) => {
+        state.sort = e.target.value;
+        applyAndRender();
+      });
+
+      // in-body search
+      const doSearchBody = () => {
+        state.q = $("#searchInput").value || "";
+        // sync to top search
+        const top = $("#topSearchInput");
+        if (top) top.value = state.q;
+        applyAndRender();
+      };
+
+      $("#searchBtn").addEventListener("click", doSearchBody);
+      $("#searchInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          doSearchBody();
+        }
+      });
+
+      // top search
+      const doSearchTop = () => {
+        state.q = $("#topSearchInput").value || "";
+        // sync to body search
+        const body = $("#searchInput");
+        if (body) body.value = state.q;
+        applyAndRender();
+      };
+
+      $("#topSearchBtn").addEventListener("click", doSearchTop);
+      $("#topSearchInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          doSearchTop();
+        }
+      });
+
+      // tabs
+      $$(".tab").forEach(btn => {
+        btn.addEventListener("click", () => {
+          state.access = btn.dataset.access;
+          applyAndRender();
+        });
+      });
+
+      // related search chips (sets query and searches)
+      $$(".chip").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const label = btn.textContent.trim();
+          state.q = label;
+          $("#topSearchInput").value = label;
+          $("#searchInput").value = label;
+          applyAndRender();
+        });
+      });
+
+      // clear all (filter + search)
+      $("#clearAllBtn").addEventListener("click", () => {
+        Object.keys(state.selected).forEach(k => state.selected[k].clear());
+        state.q = "";
+        $("#searchInput").value = "";
+        $("#topSearchInput").value = "";
+        state.sort = "title";
+        $("#sortSelect").value = "title";
+        state.access = "all";
+        applyAndRender();
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>

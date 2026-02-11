@@ -13,7 +13,7 @@ MARKETS = [
     "스마트폰", "폴더블 스마트폰", "스마트폰 AP",
     "AI", "XR", "스마트워치",
     "보안",
-    "TV", "OLED", "LCD TV", "디스플레이",
+    "디스플레이",
     "로봇청소기", "로봇",
     "반도체",
     "전기차",
@@ -22,24 +22,27 @@ MARKETS = [
 ALLOWED_CATEGORIES = {f"{g} {m} 시장" for g in GEOS for m in MARKETS}
 ALLOWED_CATEGORIES.add("미분류")
 
+
 def _to_whitelist(cat: str) -> str:
     return cat if cat in ALLOWED_CATEGORIES else "미분류"
 
 
 # ===================== 핵심: 시장 시그널 / 브랜드 시그널 =====================
-# 1) "시장 기사"로 인정할 지표 단어(시장/점유율/출하/판매/ASP/매출/성장률 등)
 MARKET_SIGNAL_RE = re.compile(
     r"(시장|점유율|출하량|판매량|판매|누적|ASP|평균판매단가|매출|성장률|CAGR|전년\s*동기|QoQ|YoY|전분기|분기|상반기|하반기)",
     re.I
 )
 
-# 2) 스마트폰 시장으로 강제할 “브랜드/제품 + 판매/출하/점유율” 조합
 PHONE_BRAND_RE = re.compile(r"(아이폰|iphone|갤럭시|galaxy|삼성전자|삼성|애플|apple)", re.I)
 PHONE_SALES_RE = re.compile(r"(판매|판매량|출하|출하량|점유율|누적\s*판매|매출)", re.I)
 
-# 3) “AI 스마트폰”은 AI 시장으로 보내지 않기 위한 보조 시그널
 AI_SMARTPHONE_RE = re.compile(r"(AI\s*스마트폰|생성형\s*AI\s*스마트폰|generative\s*AI\s*smartphone)", re.I)
 
+# 디스플레이 분류 키워드
+DISPLAY_FORCE_RE = re.compile(
+    r"(TV|OLED|LCD|디스플레이|display|모니터|monitor|올레드|맥북|노트북)",
+    re.I
+)
 
 # ===================== 범위(geo) 패턴 =====================
 GEO_PATTERNS = {
@@ -53,18 +56,12 @@ GEO_PATTERNS = {
 }
 
 # ===================== 시장(domain) 패턴 =====================
-# 요청 반영:
-# - TV/OLED/LCD/디스플레이는 "시장" 언급이 있을 때만 강하게 분류되도록 보수적으로
 DOMAIN_PATTERNS = {
-    # 폴더블/스마트폰AP은 키워드만으로도 충분히 시장 기사일 가능성이 높아서 유지
     "폴더블 스마트폰": r"(폴더블\s*스마트폰|폴더블|플립|플립폰|폴드|flip\b|fold\b|razr|레이저)",
     "스마트폰 AP": r"(\bAP\b|모바일\s*AP|\bSoC\b|chipset|칩셋|AP\s*원가|AP\s*비용|AP\s*공정)",
 
-    # 스마트폰: '시장'이 없어도, MARKET_SIGNAL_RE(출하/판매/점유율/매출/ASP 등)과 같이 쓰이면 시장 기사로 인정하도록 아래에서 보강
     "스마트폰": r"(스마트폰|smart\s*phone|smartphone|삼성폰|애플폰|mobile\s*phone|휴대폰)",
 
-    # AI: 너무 과탐되면 안 돼서, 기본은 보수적으로 두되(시장 근접),
-    # 아래에서 "AI 스마트폰"은 스마트폰 쪽으로 보내는 보정 추가
     "AI": r"(\bAI\b|인공지능|생성형\s*AI|Generative\s*AI|LLM|ChatGPT|Copilot|Gemini)",
 
     "XR": r"(\bXR\b|\bAR\b|\bVR\b|\bMR\b|헤드셋|스마트\s*안경|스마트안경)",
@@ -72,10 +69,6 @@ DOMAIN_PATTERNS = {
 
     "보안": r"(보안|사이버\s*보안|사이버\s*위협|cyber\s*security|security|침해|해킹)",
 
-    # ✅ TV/OLED/LCD/디스플레이: 시장 언급이 있는 경우만 강하게 인정
-    "OLED": r"(OLED|OLED\s*TV\s*시장|OLED\s*시장|올레드\s*시장)",
-    "LCD TV": r"(LCD|LCD\s*TV\s*시장|LCD\s*시장)",
-    "TV": r"((\bTV\b|티비|television)\s*시장|TV\s*시장)",
     "디스플레이": r"((디스플레이|display|모니터|monitor|게이밍\s*모니터)\s*시장)",
 
     "로봇청소기": r"(로봇\s*청소기|청소\s*로봇|robot\s*vacuum|vacuum\s*robot|로보락|Roborock|Ecovacs|Dreame)",
@@ -111,9 +104,6 @@ def _compile_explicit_patterns():
         "XR": r"(\bXR\b|\bAR\b|\bVR\b|\bMR\b|헤드셋|스마트\s*안경|스마트안경)",
         "스마트워치": r"(스마트\s*워치|smart\s*watch|웨어러블|wearable)",
         "보안": r"(보안|사이버\s*보안|사이버\s*위협|cyber\s*security|security)",
-        "TV": r"(\bTV\b|티비|television)",
-        "OLED": r"(OLED|올레드)",
-        "LCD TV": r"(LCD|LCD-?TV)",
         "디스플레이": r"(디스플레이|모니터)",
         "로봇청소기": r"(로봇\s*청소기|청소\s*로봇|robot\s*vacuum|Roborock|Ecovacs|Dreame)",
         "로봇": r"(로봇|휴머노이드|humanoid)",
@@ -130,6 +120,7 @@ def _compile_explicit_patterns():
             patterns.append((g, m, re.compile(p2, re.I)))
     return patterns
 
+
 EXPLICIT_PATTERNS = _compile_explicit_patterns()
 
 
@@ -145,6 +136,7 @@ _GEO_TOKEN_SPECIFIC = [
 _GEO_TOKEN_GLOBAL = r"(전\s*세계|전세계|글로벌|global|worldwide)"
 GEO_RE_SPECIFICS = [re.compile(p, re.I) for p in _GEO_TOKEN_SPECIFIC]
 GEO_RE_GLOBAL = re.compile(_GEO_TOKEN_GLOBAL, re.I)
+
 
 def _multi_geo_triggers_world(text: str) -> bool:
     t = text or ""
@@ -194,6 +186,24 @@ def _copy_range_values(src_ws, dst_ws, src_range: str, dst_top_left: str):
             val = src_ws.cell(row=min_row + r, column=min_col + c).value
             dst_ws.cell(row=dst_row0 + r, column=dst_col0 + c, value=val)
 
+
+def _clear_range(ws, cell_range: str):
+    min_col, min_row, max_col, max_row = range_boundaries(cell_range)
+    for r in range(min_row, max_row + 1):
+        for c in range(min_col, max_col + 1):
+            ws.cell(row=r, column=c, value=None)
+
+
+def _find_last_row_by_column(ws, *, col: int, start_row: int, end_row: int) -> int:
+    last_row = start_row - 1
+    for r in range(start_row, end_row + 1):
+        val = ws.cell(row=r, column=col).value
+        if val is None or str(val).strip() == "":
+            break
+        last_row = r
+    return last_row
+
+
 def _rename_if_exists(wb, candidates, new_name):
     for name in candidates:
         if name in wb.sheetnames:
@@ -208,7 +218,8 @@ def _rename_if_exists(wb, candidates, new_name):
                 return True
     return False
 
-def _fill_auto_numbers(ws, start_row: int = 5, col: int = 1, max_rows: int = 800):
+
+def _fill_auto_numbers(ws, start_row: int = 5, col: int = 1, max_rows: int = 1500):
     count = 0
     for i in range(start_row, max_rows + 1):
         val = ws.cell(row=i, column=2).value
@@ -216,6 +227,7 @@ def _fill_auto_numbers(ws, start_row: int = 5, col: int = 1, max_rows: int = 800
             break
         count += 1
         ws.cell(row=i, column=col, value=count)
+
 
 def _update_countif_formulas(ws, month, base_sheet="CP"):
     for row in range(7, 501):
@@ -263,6 +275,7 @@ def _fetch_article_text(url: str) -> str:
 def _regex_search(pattern, text):
     return re.search(pattern, text or "", flags=re.I) is not None
 
+
 def _pick_geo(text):
     if _multi_geo_triggers_world(text):
         return "전세계"
@@ -271,11 +284,13 @@ def _pick_geo(text):
             return geo
     return None
 
+
 def _compose_category(geo_label, domain_label):
     if not domain_label:
         return "미분류"
     geo = geo_label if geo_label in GEOS else "전세계"
     return f"{geo} {domain_label} 시장"
+
 
 def _pick_domains(text: str):
     hits = []
@@ -285,30 +300,27 @@ def _pick_domains(text: str):
             hits.append(key)
     return hits
 
+
 def _is_market_article(text: str) -> bool:
-    # 시장/지표 단어가 있으면 시장 기사로 인정
     return MARKET_SIGNAL_RE.search(text or "") is not None
+
 
 def _resolve_representative_domain(text: str, domains: list[str]) -> tuple[str | None, str]:
     """
     대표 도메인 결정 + reason
     """
     if not domains:
-        # 브랜드+판매 조합이면 스마트폰 시장으로 강제
         if PHONE_BRAND_RE.search(text or "") and PHONE_SALES_RE.search(text or ""):
             return "스마트폰", "R_BRAND_SALES_TO_SMARTPHONE"
         return None, "R_NO_DOMAIN_MATCH"
 
     s = set(domains)
 
-    # (3) AI 스마트폰 → 스마트폰 (AI는 보조)
     if "AI" in s and ("스마트폰" in s or AI_SMARTPHONE_RE.search(text or "")):
-        # 폴더블이면 폴더블이 우선
         if "폴더블 스마트폰" in s:
             return "폴더블 스마트폰", "R_AI_SMARTPHONE_TO_FOLDABLE"
         return "스마트폰", "R_AI_SMARTPHONE_TO_SMARTPHONE"
 
-    # 세부 우선
     if "폴더블 스마트폰" in s:
         return "폴더블 스마트폰", "R_DOMAIN_PRIORITY_FOLDABLE"
     if "스마트폰 AP" in s:
@@ -317,42 +329,21 @@ def _resolve_representative_domain(text: str, domains: list[str]) -> tuple[str |
         return "로봇청소기", "R_DOMAIN_PRIORITY_ROBOT_VAC"
     if "반도체" in s:
         return "반도체", "R_DOMAIN_PRIORITY_SEMI"
-
-    # TV/OLED/LCD는 “시장” 기반으로만 잡히도록 이미 패턴을 보수적으로 만들었고,
-    # OLED/LCD가 잡히면 TV로 통합
-    if {"OLED", "LCD TV"} & s:
-        return "TV", "R_OLED_LCD_TO_TV"
-    if "TV" in s:
-        return "TV", "R_DOMAIN_TV"
-
-    # 디스플레이는 포괄이라, 시장 기사(지표 단어)일 때만 인정
     if "디스플레이" in s and _is_market_article(text):
         return "디스플레이", "R_DOMAIN_DISPLAY_WITH_SIGNAL"
     if "디스플레이" in s and not _is_market_article(text):
-        # 디스플레이 키워드만으로는 시장 분류하지 않음
         s.remove("디스플레이")
-
-    # AI는 “AI 시장” 명시/시장 지표가 있을 때만 AI 시장으로 보내고,
-    # 아니면 보조로 취급해 떨어뜨리기
     if "AI" in s and not _is_market_article(text):
         s.remove("AI")
-
-    # 스마트폰은 시장 지표가 있으면 인정(시장 단어 없어도)
     if "스마트폰" in s and _is_market_article(text):
         return "스마트폰", "R_SMARTPHONE_WITH_SIGNAL"
-
-    # 보안/XR/스마트워치/로봇/전기차도 시장 지표 있으면 인정(없으면 미분류 가능)
     for key in ["보안", "XR", "스마트워치", "로봇", "전기차"]:
         if key in s and _is_market_article(text):
             return key, f"R_{key}_WITH_SIGNAL"
         if key in s and not _is_market_article(text):
-            # 기능/사건 기사일 가능성 높아서 제거
             s.remove(key)
-
-    # 마지막 fallback: 남아있는 것 중 우선순위
     for key in DOMAIN_PRIORITY:
         if key in s:
-            # 단, 스마트폰은 시그널 없으면 너무 넓어서 브랜드/판매 조합 아니면 미분류로 둘 수도 있음
             if key == "스마트폰" and not _is_market_article(text):
                 if PHONE_BRAND_RE.search(text or "") and PHONE_SALES_RE.search(text or ""):
                     return "스마트폰", "R_PHONE_BRAND_SALES_FALLBACK"
@@ -361,13 +352,23 @@ def _resolve_representative_domain(text: str, domains: list[str]) -> tuple[str |
 
     return None, "R_DOMAIN_EMPTY_AFTER_FILTER"
 
+
 def classify_with_reason(text: str, source_hint: str) -> tuple[str, str]:
     t = text or ""
 
-    # (1) 명시 "<범위><시장> 시장" 최우선
+    # =========================
+    # - TV/OLED/LCD/디스플레이/모니터/올레드 단어가 포함되면 무조건 "디스플레이 시장"
+    # - 국가/지역 언급 없거나 2개 이상이면 "전세계 디스플레이 시장"
+    # - 1개 국가면 "{국가} 디스플레이 시장"
+    # =========================
+    if DISPLAY_FORCE_RE.search(t):
+        geo = _pick_geo(t) or "전세계"   # 다중 국가는 _multi_geo_triggers_world로 전세계 처리됨
+        cat = _to_whitelist(_compose_category(geo, "디스플레이"))
+        return cat, "R_FORCE_DISPLAY"
+
+    # (1) 명시 "<범위><시장> 시장" 최우선 (디스플레이 강제 규칙 다음)
     eg, em = _find_explicit_geo_market(t)
     if em:
-        # 명시가 있으면 무조건 그 시장을 우선 (AI가 들어가도 일본 스마트폰 시장 같은 케이스 해결)
         cat = _to_whitelist(_compose_category(eg if eg else "전세계", em))
         return cat, "R_EXPLICIT_GEO_MARKET"
 
@@ -377,22 +378,17 @@ def classify_with_reason(text: str, source_hint: str) -> tuple[str, str]:
     # (3) 도메인 후보 수집
     domains = _pick_domains(t)
 
-    # (1) 시장 시그널 기반 보강: 시장 기사인데 스마트폰 단어가 있으면 스마트폰 후보로 넣기
-    # (네 예시: “판매 14% 증가” 같은 문장에서 시장 단어 없이도 분류되게)
     if _is_market_article(t) and _regex_search(DOMAIN_PATTERNS["스마트폰"], t):
         if "스마트폰" not in domains:
             domains.append("스마트폰")
 
-    # (2) 반도체/전기차/로봇도 시장 시그널+키워드면 후보로 보강
     for k in ["반도체", "전기차", "로봇", "로봇청소기"]:
         if _is_market_article(t) and _regex_search(DOMAIN_PATTERNS[k], t) and k not in domains:
             domains.append(k)
 
     rep_domain, reason = _resolve_representative_domain(t, domains)
 
-    # (3) 소스 힌트 보정 (디스플레이 소스는 디스플레이로)
     if not rep_domain and source_hint in ("OmdiaTV", "DSCC"):
-        # 디스플레이 시장 명시가 없더라도 소스 자체가 디스플레이면 분류
         return _to_whitelist(_compose_category(geo, "디스플레이")), "R_SOURCE_HINT_DISPLAY"
 
     if rep_domain:
@@ -406,13 +402,12 @@ def _fill_categories(ws, source_hint: str, start_row: int = 5, max_rows: int = 8
     for r in range(start_row, max_rows + 1):
         bval = ws.cell(row=r, column=2).value
         e_text = ws.cell(row=r, column=5).value
-        f_url  = ws.cell(row=r, column=6).value
+        f_url = ws.cell(row=r, column=6).value
         if not (bval or e_text or f_url):
             break
 
         text_source = (str(e_text).strip() if e_text else "")
 
-        # 요약문이 짧으면 URL 본문 보강
         if len(text_source) < 100 and f_url:
             fetched = _fetch_article_text(str(f_url))
             if fetched:
@@ -421,15 +416,11 @@ def _fill_categories(ws, source_hint: str, start_row: int = 5, max_rows: int = 8
         cat, reason = classify_with_reason(text_source, source_hint)
 
         ws.cell(row=r, column=7, value=cat)     # G열
-        # H열(reason) - 템플릿에 없어도 openpyxl은 그냥 생성하니까 안전
         ws.cell(row=r, column=8, value=reason)  # H열
 
 
 # ===================== 테스트/시뮬레이터(모의 테스트) =====================
 def simulate_classification(text_list: list[str], source_hint: str = "CP") -> list[dict]:
-    """
-    (4) 미분류 reason을 확인하면서 고도화하기 위한 테스트 도구
-    """
     out = []
     for t in text_list:
         cat, reason = classify_with_reason(t, source_hint)
@@ -446,6 +437,8 @@ def process_monthly_copy(raw_bytes: bytes, monthly_bytes: bytes, month: int) -> 
     # 시트명 변경
     _rename_if_exists(mon_wb, ["CP_9", "cp_9", "CP-9", "re:^CP[_ -]?9$"], f"CP_{m}")
     _rename_if_exists(mon_wb, ["CP_9_work", "CP_9_Work", "re:^CP[_ -]?9[_ -]?work$"], f"CP_{m}_work")
+    _rename_if_exists(mon_wb, ["트렌드포스_9", "트렌드포스 9", "re:^트렌드포스[_ -]?9$"], f"트렌드포스_{m}")
+    _rename_if_exists(mon_wb, ["트렌드포스_9_work", "트렌드포스_9_Work", "re:^트렌드포스[_ -]?9[_ -]?work$"], f"트렌드포스_{m}_work")
     _rename_if_exists(mon_wb, ["IDC_9", "re:^IDC[_ -]?9$"], f"IDC_{m}")
     _rename_if_exists(mon_wb, ["IDC_9_work", "re:^IDC[_ -]?9[_ -]?work$"], f"IDC_{m}_work")
     _rename_if_exists(mon_wb, ["OmdiaTV_9", "Omdia TV_9", "re:^Omdia\s?TV[_ -]?9$"], f"OmdiaTV_{m}")
@@ -454,40 +447,66 @@ def process_monthly_copy(raw_bytes: bytes, monthly_bytes: bytes, month: int) -> 
     _rename_if_exists(mon_wb, ["DSCC_9_work", "re:^DSCC[_ -]?9[_ -]?work$"], f"DSCC_{m}_work")
     _rename_if_exists(mon_wb, [f"9월 총평", "re:^9\s*월\s*총평$"], f"{m}월 총평")
 
-    # RAW → 월 시트 값 복사
-    _copy_range_values(raw_wb["CPR"],      mon_wb[f"CP_{m}"],      "B5:B800", "B5")
-    _copy_range_values(raw_wb["CPR"],      mon_wb[f"CP_{m}"],      "D5:G800", "C5")
-    _copy_range_values(raw_wb["IDC"],      mon_wb[f"IDC_{m}"],     "B5:B800", "B5")
-    _copy_range_values(raw_wb["IDC"],      mon_wb[f"IDC_{m}"],     "D5:G800", "C5")
-    _copy_range_values(raw_wb["Omdia TV"], mon_wb[f"OmdiaTV_{m}"], "B5:B800", "B5")
-    _copy_range_values(raw_wb["Omdia TV"], mon_wb[f"OmdiaTV_{m}"], "D5:G800", "C5")
-    _copy_range_values(raw_wb["DSCC"],     mon_wb[f"DSCC_{m}"],    "B5:B800", "B5")
-    _copy_range_values(raw_wb["DSCC"],     mon_wb[f"DSCC_{m}"],    "D5:G800", "C5")
+    sources = [
+        ("CPR", "CP"),
+        ("트렌드포스", "트렌드포스"),
+        ("IDC", "IDC"),
+        ("Omdia TV", "OmdiaTV"),
+        ("DSCC", "DSCC"),
+    ]
+
+    for raw_name, target_prefix in sources:
+        # RAW에 해당 시트가 없으면 스킵
+        if raw_name not in raw_wb.sheetnames:
+            continue
+
+        src_ws = raw_wb[raw_name]
+        dst_name = f"{target_prefix}_{m}"
+        if dst_name not in mon_wb.sheetnames:
+            continue
+        dst_ws = mon_wb[dst_name]
+
+        _clear_range(dst_ws, "B5:B2000")
+        _clear_range(dst_ws, "C5:F2000")
+
+        last_row = _find_last_row_by_column(src_ws, col=2, start_row=5, end_row=2000)
+        if last_row < 5:
+            continue
+
+        _copy_range_values(src_ws, dst_ws, f"B5:B{last_row}", "B5")
+        _copy_range_values(src_ws, dst_ws, f"D5:G{last_row}", "C5")
 
     # 번호 매기기
-    for name in [f"CP_{m}", f"IDC_{m}", f"OmdiaTV_{m}", f"DSCC_{m}"]:
-        _fill_auto_numbers(mon_wb[name])
+    for name in [f"CP_{m}", f"트렌드포스_{m}", f"IDC_{m}", f"OmdiaTV_{m}", f"DSCC_{m}"]:
+        if name in mon_wb.sheetnames:
+            _fill_auto_numbers(mon_wb[name])
 
-    # A2 수식 업데이트 (IDC/OmdiaTV/DSCC)
-    for name in [f"IDC_{m}", f"OmdiaTV_{m}", f"DSCC_{m}"]:
-        mon_wb[name]["A2"] = f"=CP_{m}!A2"
+    # A2 수식 업데이트
+    for name in [f"트렌드포스_{m}", f"IDC_{m}", f"OmdiaTV_{m}", f"DSCC_{m}"]:
+        if name in mon_wb.sheetnames:
+            mon_wb[name]["A2"] = f"=CP_{m}!A2"
 
     # ✅ CP_{m} 시트 A2 날짜 자동 업데이트
     current_year = datetime.now().year
     last_day = calendar.monthrange(current_year, m)[1]
     start_date = f"{current_year}/{m:02d}/01"
     end_date = f"{current_year}/{m:02d}/{last_day:02d}"
-    mon_wb[f"CP_{m}"]["A2"] = f"[기간] {start_date}~ {end_date}"
+    if f"CP_{m}" in mon_wb.sheetnames:
+        mon_wb[f"CP_{m}"]["A2"] = f"[기간] {start_date}~ {end_date}"
 
     # 카테고리 자동 분류 (G열), reason(H열)
-    _fill_categories(mon_wb[f"CP_{m}"],      "CP")
-    _fill_categories(mon_wb[f"IDC_{m}"],     "IDC")
-    _fill_categories(mon_wb[f"OmdiaTV_{m}"], "OmdiaTV")
-    _fill_categories(mon_wb[f"DSCC_{m}"],    "DSCC")
+    if f"CP_{m}" in mon_wb.sheetnames:
+        _fill_categories(mon_wb[f"CP_{m}"], "CP")
+    if f"트렌드포스_{m}" in mon_wb.sheetnames:
+        _fill_categories(mon_wb[f"트렌드포스_{m}"], "트렌드포스")
+    if f"IDC_{m}" in mon_wb.sheetnames:
+        _fill_categories(mon_wb[f"IDC_{m}"], "IDC")
+    if f"OmdiaTV_{m}" in mon_wb.sheetnames:
+        _fill_categories(mon_wb[f"OmdiaTV_{m}"], "OmdiaTV")
+    if f"DSCC_{m}" in mon_wb.sheetnames:
+        _fill_categories(mon_wb[f"DSCC_{m}"], "DSCC")
 
     out = BytesIO()
     mon_wb.save(out)
     out.seek(0)
     return out.getvalue()
-
-    

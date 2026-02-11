@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>User Stats</title>
+
+  <style>
+    :root{
+      --border:#e5e7eb;
+      --text:#111827;
+      --muted:#6b7280;
+      --bg:#ffffff;
+      --chip2:#f3f4f6;
+      --chip2Text:#1f2937;
+      --rowHover:#f9fafb;
+
+      --sideBg:#ffffff;
+      --sideActiveBg:#f3f4f6;
+      --brand:#ef4444;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#fff;color:var(--text);}
+
+    /* ===== Layout ===== */
+    .app{display:flex;min-height:100vh;background:#fff;}
+    .sidebar{width:300px;border-right:1px solid var(--border);background:var(--sideBg);display:flex;flex-direction:column;}
+    .main{flex:1;min-width:0;background:#fff;}
+
+    /* ===== Sidebar ===== */
+    .sideHeader{padding:18px 18px 14px;border-bottom:1px solid #f1f5f9;}
+    .brandRow{display:flex;align-items:center;gap:10px;}
+    .brandMark{width:26px;height:26px;border-radius:50%;background:rgba(239,68,68,.12);position:relative;}
+    .brandMark:before{content:"";position:absolute;inset:6px;border:3px solid var(--brand);border-top-color:transparent;border-radius:50%;transform:rotate(20deg);}
+    .brandName{font-size:22px;font-weight:800;color:var(--brand);letter-spacing:-.3px;}
+    .brandSub{margin-left:36px;margin-top:4px;font-size:13px;color:#4b5563;font-weight:600;}
+
+    .sideNav{padding:12px 10px;overflow:auto;}
+    .navGroup{margin-top:8px;}
+    .navParent{
+      width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;
+      padding:10px 10px;border-radius:10px;background:transparent;border:none;cursor:pointer;
+      color:#111827;font-size:14px;font-weight:700;
+    }
+    .navParent:hover{background:#f9fafb;}
+    .navLeft{display:flex;align-items:center;gap:10px;min-width:0;}
+    .navIcon{width:18px;height:18px;flex:0 0 auto;color:#111827;}
+    .chev{width:16px;height:16px;flex:0 0 auto;color:#6b7280;transition:transform .15s ease;}
+    .navGroup[data-open="true"] .chev{transform:rotate(180deg);}
+    .navChildren{margin:6px 0 0 34px;display:none;}
+    .navGroup[data-open="true"] .navChildren{display:block;}
+    .navItem{
+      display:block;padding:10px 12px;border-radius:10px;text-decoration:none;color:#111827;
+      font-size:14px;font-weight:600;
+    }
+    .navItem:hover{background:#f9fafb;}
+    .navItem.active{background:var(--sideActiveBg);}
+
+    .navSolo{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:10px 10px;border-radius:10px;text-decoration:none;color:#111827;font-weight:700;font-size:14px;
+    }
+    .navSolo:hover{background:#f9fafb;}
+
+    .sideFooter{margin-top:auto;padding:12px 10px 14px;border-top:1px solid #f1f5f9;}
+    .userCard{
+      display:flex;align-items:center;justify-content:space-between;padding:10px 10px;border-radius:12px;
+      background:#f9fafb;border:1px solid #f1f5f9;cursor:pointer;
+    }
+    .userLeft{display:flex;align-items:center;gap:10px;min-width:0;}
+    .avatar{
+      width:28px;height:28px;border-radius:10px;background:#e5e7eb;display:flex;align-items:center;justify-content:center;
+      color:#374151;font-weight:800;font-size:13px;flex:0 0 auto;
+    }
+    .userText{min-width:0;}
+    .userName{font-size:13px;font-weight:800;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;}
+    .userEmail{margin-top:2px;font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;}
+
+    /* ===== Main styles ===== */
+    .wrap{max-width:1400px;margin:0 auto;padding:24px;}
+    .crumb{font-size:13px;color:#6b7280;}
+    .crumb span{cursor:pointer}
+    .crumb .current{color:#374151;cursor:default}
+    h1{margin:12px 0 18px;font-size:28px;}
+    .bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+    .left{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+    .control{
+      height:40px;border:1px solid var(--border);border-radius:8px;padding:0 12px;background:var(--bg);
+      font-size:14px;color:#1f2937;box-shadow:0 1px 2px rgba(0,0,0,.04);
+    }
+    select.control{padding-right:34px}
+    .search{width:260px;padding-left:34px}
+    .searchWrap{position:relative}
+    .searchIcon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#9ca3af;font-size:14px;}
+    .btn{
+      height:40px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:0 12px;
+      font-size:14px;color:#111827;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.04);
+      display:inline-flex;align-items:center;gap:8px;
+    }
+    .btn:hover{background:#f9fafb;}
+    .tableWrap{margin-top:14px;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+    table{width:100%;border-collapse:separate;border-spacing:0;}
+    thead th{
+      background:#fff;position:sticky;top:0;z-index:1;font-size:12px;color:#6b7280;text-align:left;
+      padding:12px 14px;border-bottom:1px solid var(--border);white-space:nowrap;
+    }
+    tbody td{padding:14px;border-top:1px solid #f1f5f9;font-size:14px;vertical-align:top;}
+    tbody tr:hover{background:var(--rowHover);}
+    .colTitle{min-width:520px;}
+    .chip{
+      display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;
+      background:var(--chip2);color:var(--chip2Text);
+    }
+    .action{font-weight:700;color:#374151;cursor:pointer;background:none;border:none;padding:0}
+    .muted{color:var(--muted);font-size:12px;margin-top:10px}
+
+    /* ===== Filter popover (image-like) ===== */
+    .popWrap{position:relative;}
+    .popover{
+      position:absolute;top:48px;left:0;z-index:50;
+      width:420px;background:#fff;border:1px solid var(--border);border-radius:12px;
+      box-shadow:0 12px 30px rgba(0,0,0,.10);
+      padding:14px;display:none;
+    }
+    .popover.open{display:block;}
+    .popTitle{font-size:14px;font-weight:800;margin:2px 0 12px;}
+    .field{margin-top:10px;}
+    .label{font-size:12px;color:#111827;font-weight:700;margin-bottom:6px;}
+    .selectLike, .dateLike{
+      width:100%;
+      height:42px;
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:0 12px;
+      font-size:14px;
+      background:#fff;
+      color:#111827;
+      display:flex;align-items:center;justify-content:space-between;
+    }
+    .selectLike select{
+      width:100%;height:100%;
+      border:none;outline:none;background:transparent;
+      font-size:14px;color:#111827;
+      appearance:none;
+    }
+    .selectArrow{
+      position:absolute;right:14px;pointer-events:none;color:#6b7280;
+    }
+    .selectBox{position:relative;}
+    .dateRow{display:flex;align-items:center;gap:10px;}
+    .dateBox{
+      position:relative;flex:1;
+      height:42px;border:1px solid var(--border);border-radius:10px;background:#fff;
+      display:flex;align-items:center;gap:10px;padding:0 12px;
+    }
+    .dateBox svg{width:16px;height:16px;color:#6b7280;flex:0 0 auto;}
+    .dateBox input{
+      border:none;outline:none;background:transparent;
+      font-size:14px;color:#111827;width:100%;
+    }
+    .toText{font-size:13px;color:#6b7280;flex:0 0 auto;}
+
+    .dateSummary{
+      height:40px;display:inline-flex;align-items:center;
+      padding:0 10px;border-radius:999px;border:1px solid var(--border);
+      background:#fff;color:#374151;font-size:13px;gap:8px;
+    }
+    .dateSummary .mut{color:#6b7280;}
+    .ghostX{
+      border:none;background:transparent;cursor:pointer;color:#9ca3af;
+      font-size:14px;line-height:1;padding:2px 4px;border-radius:6px;
+    }
+    .ghostX:hover{background:#f3f4f6;color:#6b7280;}
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <!-- ===== Left Sidebar ===== -->
+    <aside class="sidebar">
+      <div class="sideHeader">
+        <div class="brandRow">
+          <div class="brandMark" aria-hidden="true"></div>
+          <div class="brandName">Counterpoint</div>
+        </div>
+        <div class="brandSub">Admin Panel</div>
+      </div>
+
+      <nav class="sideNav">
+        <div class="navGroup" data-group="stats" data-open="true">
+          <button class="navParent" type="button">
+            <div class="navLeft">
+              <svg class="navIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 19V5"/><path d="M4 19h16"/>
+                <path d="M8 19v-7"/><path d="M12 19v-11"/><path d="M16 19v-4"/>
+              </svg>
+              <span>Stats</span>
+            </div>
+            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </button>
+          <div class="navChildren">
+            <a class="navItem active" href="#">User Stats</a>
+            <a class="navItem" href="#">Post Stats</a>
+            <a class="navItem" href="#">Registrants Stats</a>
+          </div>
+        </div>
+
+        <a class="navSolo" href="#">
+          <div class="navLeft">
+            <svg class="navIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4h16v16H4z"/><path d="M8 8h8"/><path d="M8 12h8"/><path d="M8 16h5"/>
+            </svg>
+            <span>Post</span>
+          </div>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </a>
+
+        <a class="navSolo" href="#">
+          <div class="navLeft">
+            <svg class="navIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="8" r="4"/>
+            </svg>
+            <span>User</span>
+          </div>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </a>
+
+        <a class="navSolo" href="#">
+          <div class="navLeft">
+            <svg class="navIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4h16v16H4z"/><path d="M4 7l8 6 8-6"/>
+            </svg>
+            <span>Email</span>
+          </div>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </a>
+
+        <a class="navSolo" href="#">
+          <div class="navLeft">
+            <svg class="navIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 10l9-7 9 7v11H3z"/><path d="M9 21V12h6v9"/>
+            </svg>
+            <span>Main</span>
+          </div>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </a>
+
+        <a class="navSolo" href="#">
+          <div class="navLeft">
+            <svg class="navIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
+            </svg>
+            <span>Profile</span>
+          </div>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </a>
+      </nav>
+
+      <div class="sideFooter">
+        <div class="userCard">
+          <div class="userLeft">
+            <div class="avatar">K</div>
+            <div class="userText">
+              <div class="userName">Korea Marketing</div>
+              <div class="userEmail">korea.marketing@counter...</div>
+            </div>
+          </div>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ===== Right Content ===== -->
+    <main class="main">
+      <div class="wrap">
+        <div class="crumb">
+          <span>Home</span> &nbsp;&gt;&nbsp;
+          <span>Stats</span> &nbsp;&gt;&nbsp;
+          <span class="current">User stats</span>
+        </div>
+
+        <h1>User Stats</h1>
+
+        <div class="bar">
+          <div class="left">
+            <select class="control" id="fieldSelect">
+              <option>Email</option>
+              <option>Name</option>
+              <option>Company</option>
+            </select>
+
+            <div class="searchWrap">
+              <span class="searchIcon">🔎</span>
+              <input class="control search" id="searchInput" placeholder="Search by name" />
+            </div>
+
+            <button class="btn" type="button" id="filterBtn">
+              <span style="color:#9ca3af">⎇</span>
+              <span>Filter</span>
+              <span style="color:#9ca3af">▼</span>
+            </button>
+
+            <!-- ✅ Group 버튼(클릭 시 이미지 같은 Filter panel) -->
+            <div class="popWrap" id="groupFilterWrap">
+              <button class="control" id="groupFilterBtn" type="button" style="cursor:pointer; display:inline-flex; align-items:center; gap:8px;">
+                <span id="groupBtnText" style="color:#111827;">Group</span>
+                <span style="color:#9ca3af;">▼</span>
+              </button>
+
+              <div class="popover" id="groupPopover" role="dialog" aria-label="Filter Options">
+                <div class="popTitle">Filter Options</div>
+
+                <div class="field">
+                  <div class="label">Client Group</div>
+                  <div class="selectBox">
+                    <div class="selectLike">
+                      <select id="clientGroupSelect">
+                        <option value="">All Groups</option>
+                        <option value="SK Hynix">SK Hynix</option>
+                        <option value="Samsung">Samsung</option>
+                        <option value="TSMC">TSMC</option>
+                        <option value="Trial">Trial</option>
+                        <option value="Standby">Standby</option>
+                      </select>
+                    </div>
+                    <span class="selectArrow">▾</span>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <div class="label">Action Type</div>
+                  <div class="selectBox">
+                    <div class="selectLike">
+                      <select id="actionTypeSelect">
+                        <option value="">All</option>
+                        <option value="VIEW">VIEW</option>
+                        <option value="DOWNLOAD">DOWNLOAD</option>
+                      </select>
+                    </div>
+                    <span class="selectArrow">▾</span>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <div class="label">Created Date Range</div>
+                  <div class="dateRow">
+                    <div class="dateBox">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 4h18v18H3z"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>
+                      </svg>
+                      <input id="startDate" type="date" />
+                    </div>
+                    <div class="toText">to</div>
+                    <div class="dateBox">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 4h18v18H3z"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>
+                      </svg>
+                      <input id="endDate" type="date" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ✅ group 박스 오른쪽에 선택한 date 보여주기 -->
+            <div class="dateSummary" id="dateSummary" style="display:none;">
+              <span class="mut">Date</span>
+              <span id="dateSummaryText"></span>
+              <button class="ghostX" id="clearDateBtn" type="button" title="Clear date">✕</button>
+            </div>
+
+            <button class="btn" type="button" id="clearGroupBtn" style="display:none;">
+              <span id="selectedGroupText"></span>
+              <span style="color:#9ca3af">✕</span>
+            </button>
+          </div>
+
+          <div class="right">
+            <button class="btn" type="button">Export Excel</button>
+          </div>
+        </div>
+
+        <div class="tableWrap" id="tableWrap">
+          <div style="overflow:auto;">
+            <table>
+              <thead>
+                <tr id="tableHeaderRow">
+                  <th>#</th>
+                  <th>User</th>
+                  <th>Name</th>
+                  <th>Company</th>
+                  <th>Country</th>
+                  <th>User Group</th>
+                  <th class="colTitle">Title</th>
+                  <th>Post Type</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="muted">
+          Group/Date 선택 시: 해당 조건만 표시 + Count 컬럼 추가 + Ranking(Title VIEW)
+        </div>
+      </div>
+    </main>
+  </div>
+
+<script>
+  /* ===== Sidebar toggle (Stats) ===== */
+  document.querySelectorAll(".navGroup .navParent").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const group = btn.closest(".navGroup");
+      group.dataset.open = (group.dataset.open === "true") ? "false" : "true";
+    });
+  });
+
+  /* ====== Deterministic PRNG (stable + mixed) ====== */
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function hashSeed(str) {
+    let h = 2166136261 >>> 0; // FNV-1a
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  /* ====== Data ====== */
+  const LAST_NAMES = ["Kim","Lee","Park","Choi","Jung","Kang","Cho","Yoon","Jang","Lim","Han","Oh","Shin","Kwon","Hwang","Ahn","Song","Yoo","Hong","Ryu","Jeon","Ko","Koo","Bae","Baek","Nam","Seo","Roh","Moon","Yun"];
+  const GROUPS = ["SK Hynix","Samsung","TSMC","Trial","Standby"];
+  const TITLES = [
+    "H1 2025 Smartphone Key Component Price Trends",
+    "Component Price Surge: How Smartphone OEMs Are Adapting Their Premium Product Strategy",
+    "Component Price Tracker 1H2023",
+    "Component Price Tracker 2H 2016 - 1H 2018",
+    "Component Price Tracker 2H2016-2H2022",
+    "Component Price Tracker 2H 2016 - 2H 2017",
+    "Smartphone Memory Outlook: Pricing and Supply Dynamics",
+    "OLED Panel Cost Review and Near-Term Forecast",
+    "Camera Module Pricing: Premium Mix Shift Impact",
+    "Battery Materials Trend: Cost Pressure and Mix Change",
+    "RF Front-End Pricing: 5G Sub-6 and mmWave Update",
+    "Foundry Capacity Update: Advanced Nodes and Lead Times"
+  ];
+  const WEIGHTS = {
+    "SK Hynix": {"H1 2025 Smartphone Key Component Price Trends":8,"Smartphone Memory Outlook: Pricing and Supply Dynamics":7,"Component Price Tracker 2H2016-2H2022":6,"Component Price Tracker 1H2023":4,"Component Price Surge: How Smartphone OEMs Are Adapting Their Premium Product Strategy":3},
+    "Samsung":  {"OLED Panel Cost Review and Near-Term Forecast":7,"Camera Module Pricing: Premium Mix Shift Impact":6,"Component Price Tracker 1H2023":5,"Component Price Surge: How Smartphone OEMs Are Adapting Their Premium Product Strategy":4,"H1 2025 Smartphone Key Component Price Trends":3},
+    "TSMC":     {"Foundry Capacity Update: Advanced Nodes and Lead Times":8,"RF Front-End Pricing: 5G Sub-6 and mmWave Update":5,"Component Price Tracker 2H 2016 - 1H 2018":4,"Component Price Tracker 2H 2016 - 2H 2017":3,"Component Price Tracker 1H2023":3},
+    "Trial":    {"Component Price Surge: How Smartphone OEMs Are Adapting Their Premium Product Strategy":7,"Battery Materials Trend: Cost Pressure and Mix Change":6,"Camera Module Pricing: Premium Mix Shift Impact":4,"H1 2025 Smartphone Key Component Price Trends":3},
+    "Standby":  {"Component Price Tracker 2H 2016 - 2H 2017":7,"Component Price Tracker 1H2023":5,"Component Price Tracker 2H2016-2H2022":4,"RF Front-End Pricing: 5G Sub-6 and mmWave Update":3}
+  };
+  const GROUP_COUNTS = {"SK Hynix":65,"Samsung":55,"TSMC":50,"Trial":45,"Standby":45};
+
+  function pickTitle(group, seed) {
+    const w = WEIGHTS[group] || {};
+    const pool = [];
+    for (const t of TITLES) for (let i = 0; i < (w[t] ?? 1); i++) pool.push(t);
+    return pool[seed % pool.length];
+  }
+
+  // Date range: 2023/01/01 ~ 2025/12/31
+  const START = new Date(2023, 0, 1);
+  const END   = new Date(2025, 11, 31);
+  const MS_DAY = 24 * 60 * 60 * 1000;
+  const TOTAL_DAYS = Math.floor((END - START) / MS_DAY) + 1;
+
+  function pad2(n){ return String(n).padStart(2,"0"); }
+  function fmtYMDslash(d){
+    return `${d.getFullYear()}/${pad2(d.getMonth()+1)}/${pad2(d.getDate())}`;
+  }
+  function parseSlashYMD(s){
+    const [y,m,d] = String(s).split("/").map(Number);
+    return new Date(y, (m||1)-1, d||1);
+  }
+
+  // PostType 6:4 (REPORT:INSIGHT), Action 3:7 (VIEW:DOWNLOAD)
+  function pickPostType(r){ return (r < 0.6) ? "REPORT" : "INSIGHT"; }
+  function pickAction(r){ return (r < 0.3) ? "VIEW" : "DOWNLOAD"; }
+
+  // Build rows
+  const rows = [];
+  let id = 1;
+  for (const g of GROUPS) {
+    const cnt = GROUP_COUNTS[g] || 40;
+    for (let i = 0; i < cnt; i++) {
+      const ln = LAST_NAMES[(i * 7 + g.length) % LAST_NAMES.length];
+      const rng = mulberry32(hashSeed(`${g}|${i}|${id}|seed`));
+
+      const title = pickTitle(g, Math.floor(rng() * 100000));
+      const postType = pickPostType(rng());
+      const action = pickAction(rng());
+
+      const dayOffset = Math.floor(rng() * TOTAL_DAYS);
+      const created = new Date(START.getTime() + dayOffset * MS_DAY);
+
+      rows.push({
+        id: id++,
+        user: `${ln}.${i % 9}@sk.com`,
+        name: ln,
+        company: g,
+        country: "KOR",
+        userGroup: g,
+        title,
+        postType,
+        action,
+        created: fmtYMDslash(created)
+      });
+    }
+  }
+
+  /* ====== State + DOM ====== */
+  let selectedGroup = "";
+  let actionType = ""; // "" => All
+  let startDate = "";  // yyyy-mm-dd
+  let endDate = "";
+  let search = "";
+
+  const $body = document.getElementById("tableBody");
+  const $headerRow = document.getElementById("tableHeaderRow");
+  const $search = document.getElementById("searchInput");
+
+  const $clearGroupBtn = document.getElementById("clearGroupBtn");
+  const $selectedGroupText = document.getElementById("selectedGroupText");
+
+  const $groupFilterWrap = document.getElementById("groupFilterWrap");
+  const $groupFilterBtn = document.getElementById("groupFilterBtn");
+  const $groupPopover = document.getElementById("groupPopover");
+  const $clientGroupSelect = document.getElementById("clientGroupSelect");
+  const $actionTypeSelect = document.getElementById("actionTypeSelect");
+  const $startDate = document.getElementById("startDate");
+  const $endDate = document.getElementById("endDate");
+
+  const $dateSummary = document.getElementById("dateSummary");
+  const $dateSummaryText = document.getElementById("dateSummaryText");
+  const $clearDateBtn = document.getElementById("clearDateBtn");
+  const $groupBtnText = document.getElementById("groupBtnText");
+
+  const esc = (s) =>
+    String(s)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+
+  const td = (v) => {
+    const x = document.createElement("td");
+    x.textContent = String(v);
+    x.style.whiteSpace = "nowrap";
+    return x;
+  };
+
+  function withinDateRange(createdSlash, sDash, eDash){
+    if (!sDash && !eDash) return true;
+    const d = parseSlashYMD(createdSlash);
+    const s = sDash ? new Date(sDash + "T00:00:00") : null;
+    const e = eDash ? new Date(eDash + "T23:59:59") : null;
+    if (s && d < s) return false;
+    if (e && d > e) return false;
+    return true;
+  }
+
+  function ensureCountCol() {
+    const has = !!document.getElementById("countHeader");
+    const anyFilter = (selectedGroup || startDate || endDate || actionType);
+    if (anyFilter && !has) {
+      const th = document.createElement("th");
+      th.id = "countHeader";
+      th.textContent = "Count";
+      $headerRow.insertBefore(th, $headerRow.lastElementChild); // Action 앞
+    }
+    if (!anyFilter && has) document.getElementById("countHeader").remove();
+  }
+
+  function ensureRankingBox() {
+    let box = document.getElementById("rankingBox");
+    if (box) return box;
+    const wrap = document.getElementById("tableWrap");
+    box = document.createElement("div");
+    box.id = "rankingBox";
+    box.style.borderBottom = "1px solid #e5e7eb";
+    box.style.background = "#fff";
+    box.style.padding = "12px 14px";
+    box.style.display = "none";
+    wrap.insertBefore(box, wrap.firstElementChild);
+    return box;
+  }
+
+  // ✅ Ranking table: Post Type 컬럼을 Count 왼쪽에 추가
+  function renderRanking(list, label) {
+    const box = ensureRankingBox();
+    const anyFilter = (selectedGroup || startDate || endDate || actionType);
+    if (!anyFilter) {
+      box.style.display = "none";
+      box.innerHTML = "";
+      return;
+    }
+    const top = list.slice(0, 10);
+    box.style.display = "block";
+    box.innerHTML = `
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:13px;color:#6b7280;">Ranking</div>
+          <div style="font-size:16px;font-weight:700;color:#111827;margin-top:2px;">
+            ${esc(label)} · Top ${top.length}
+          </div>
+        </div>
+        <div style="font-size:12px;color:#6b7280;">
+          (현재 표시 조건: Search + Group/Date/Action 필터 기준)
+        </div>
+      </div>
+
+      <div style="margin-top:10px;overflow:auto;">
+        <table style="width:100%;border-collapse:separate;border-spacing:0;">
+          <thead>
+            <tr>
+              <th style="text-align:left;font-size:12px;color:#6b7280;padding:8px 0;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Rank</th>
+              <th style="text-align:left;font-size:12px;color:#6b7280;padding:8px 0;border-bottom:1px solid #e5e7eb;">Title</th>
+              <th style="text-align:left;font-size:12px;color:#6b7280;padding:8px 0;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Post Type</th>
+              <th style="text-align:left;font-size:12px;color:#6b7280;padding:8px 0;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Action</th>
+              <th style="text-align:right;font-size:12px;color:#6b7280;padding:8px 0;border-bottom:1px solid #e5e7eb;white-space:nowrap;">Count</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${top.map((x,i)=>`
+              <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;white-space:nowrap;">${i+1}</td>
+                <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">${esc(x.title)}</td>
+                <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;white-space:nowrap;color:#374151;font-weight:600;">
+                  ${esc(x.postType)}
+                </td>
+                <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;white-space:nowrap;color:#374151;font-weight:600;">
+                  ${esc(x.action)}
+                </td>
+                <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap;font-weight:700;">
+                  ${x.count}
+                </td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function updateTopDateSummary() {
+    const has = !!(startDate || endDate);
+    if (!has) {
+      $dateSummary.style.display = "none";
+      $dateSummaryText.textContent = "";
+      return;
+    }
+    const s = startDate ? startDate.replaceAll("-","/") : "—";
+    const e = endDate ? endDate.replaceAll("-","/") : "—";
+    $dateSummary.style.display = "inline-flex";
+    $dateSummaryText.textContent = `${s} ~ ${e}`;
+  }
+
+  function updateGroupClearUI() {
+    if (selectedGroup) {
+      $clearGroupBtn.style.display = "inline-flex";
+      $selectedGroupText.textContent = selectedGroup;
+      $groupBtnText.textContent = selectedGroup;
+    } else {
+      $clearGroupBtn.style.display = "none";
+      $groupBtnText.textContent = "Group";
+    }
+  }
+
+  function render() {
+    const q = search.trim().toLowerCase();
+
+    // search
+    let list = !q ? rows : rows.filter(r =>
+      r.user.toLowerCase().includes(q) ||
+      r.name.toLowerCase().includes(q) ||
+      r.company.toLowerCase().includes(q) ||
+      r.country.toLowerCase().includes(q) ||
+      r.userGroup.toLowerCase().includes(q) ||
+      r.title.toLowerCase().includes(q) ||
+      r.postType.toLowerCase().includes(q) ||
+      r.action.toLowerCase().includes(q) ||
+      r.created.includes(q)
+    );
+
+    // filters
+    if (selectedGroup) list = list.filter(r => r.userGroup === selectedGroup);
+    if (actionType) list = list.filter(r => r.action === actionType);
+    if (startDate || endDate) list = list.filter(r => withinDateRange(r.created, startDate, endDate));
+
+    const anyFilter = (selectedGroup || startDate || endDate || actionType);
+
+    ensureCountCol();
+    updateGroupClearUI();
+    updateTopDateSummary();
+
+    $body.innerHTML = "";
+
+    // countifs map
+    const countifs = new Map();
+    for (const r of list) {
+      const k = `${r.userGroup}||${r.title}||${r.action}||${r.postType}`;
+      countifs.set(k, (countifs.get(k) || 0) + 1);
+    }
+
+    // sort base
+    list = [...list].sort((a,b)=>a.id-b.id);
+
+    // group 선택 시 count 기준 내림차순
+    if (selectedGroup) {
+      list.sort((a, b) => {
+        const ka = `${a.userGroup}||${a.title}||${a.action}||${a.postType}`;
+        const kb = `${b.userGroup}||${b.title}||${b.action}||${b.postType}`;
+        const ca = countifs.get(ka) || 0;
+        const cb = countifs.get(kb) || 0;
+        return (cb - ca) || (a.id - b.id);
+      });
+    }
+
+    // ranking: title + postType 기준
+    const rankMap = new Map();
+
+    for (const r of list) {
+      // actionType 선택되어 있으면 그 action만 집계
+      if (actionType && r.action !== actionType) continue;
+
+      const key = `${r.title}||${r.postType}||${r.action}`;
+      rankMap.set(key, (rankMap.get(key) || 0) + 1);
+    }
+
+    const ranked = [...rankMap.entries()]
+      .map(([key, count]) => {
+        const [title, postType, action] = key.split("||");
+        return { title, postType, action, count };
+      })
+      .sort((a, b) =>
+        b.count - a.count ||
+        a.title.localeCompare(b.title) ||
+        a.postType.localeCompare(b.postType) ||
+        a.action.localeCompare(b.action)
+      );
+
+    const label = selectedGroup ? selectedGroup : "All Groups";
+    const actionLabel = actionType ? actionType : "All";
+    renderRanking(ranked, `${label} · Title ${actionLabel}`);
+
+    // empty
+    if (list.length === 0) {
+      const tr = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = anyFilter ? 11 : 10;
+      cell.style.padding = "40px 14px";
+      cell.style.textAlign = "center";
+      cell.style.color = "#6b7280";
+      cell.textContent = "No results";
+      tr.appendChild(cell);
+      $body.appendChild(tr);
+      return;
+    }
+
+    // rows render
+    for (const r of list) {
+      const tr = document.createElement("tr");
+
+      tr.appendChild(td(r.id));
+      tr.appendChild(td(r.user));
+
+      const nameTd = document.createElement("td");
+      nameTd.innerHTML = `<div style="line-height:1.25">${esc(r.name)}</div><div style="line-height:1.25"></div>`;
+      tr.appendChild(nameTd);
+
+      tr.appendChild(td(r.company));
+      tr.appendChild(td(r.country));
+
+      const groupTd = document.createElement("td");
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.textContent = r.userGroup;
+      groupTd.appendChild(chip);
+      tr.appendChild(groupTd);
+
+      const titleTd = document.createElement("td");
+      titleTd.className = "colTitle";
+      titleTd.textContent = r.title;
+      tr.appendChild(titleTd);
+
+      tr.appendChild(td(r.postType));
+
+      if (anyFilter) {
+        const k = `${r.userGroup}||${r.title}||${r.action}||${r.postType}`;
+        tr.appendChild(td(countifs.get(k) || 1));
+      }
+
+      const actionTd = document.createElement("td");
+      const btn = document.createElement("button");
+      btn.className = "action";
+      btn.type = "button";
+      btn.textContent = r.action;
+      actionTd.appendChild(btn);
+      tr.appendChild(actionTd);
+
+      $body.appendChild(tr);
+    }
+  }
+
+  /* ====== Popover open/close ====== */
+  function closePop(){ $groupPopover.classList.remove("open"); }
+
+  $groupFilterBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    $groupPopover.classList.toggle("open");
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!$groupFilterWrap.contains(e.target)) closePop();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closePop();
+  });
+
+  /* ====== Events (filters) ====== */
+  $clientGroupSelect.addEventListener("change", (e) => {
+    selectedGroup = e.target.value;
+    render();
+  });
+
+  $actionTypeSelect.addEventListener("change", (e) => {
+    actionType = e.target.value; // "" => All
+    render();
+  });
+
+  $startDate.addEventListener("change", (e) => {
+    startDate = e.target.value || "";
+    render();
+  });
+
+  $endDate.addEventListener("change", (e) => {
+    endDate = e.target.value || "";
+    render();
+  });
+
+  $clearGroupBtn.addEventListener("click", () => {
+    selectedGroup = "";
+    $clientGroupSelect.value = "";
+    render();
+  });
+
+  $clearDateBtn.addEventListener("click", () => {
+    startDate = "";
+    endDate = "";
+    $startDate.value = "";
+    $endDate.value = "";
+    render();
+  });
+
+  $search.addEventListener("input", (e) => {
+    search = e.target.value || "";
+    render();
+  });
+
+  render();
+</script>
+
+
+
+
+</body>
+</html>

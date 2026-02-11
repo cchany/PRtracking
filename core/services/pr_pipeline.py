@@ -95,7 +95,7 @@ def build_monthly_workbook(raw_df, year:int, month:int, cat_rules, tier_table_df
         summary.to_excel(w, sheet_name="총평", index=False)
 
         # Top8+기타 + 차트
-        for src in ["CP","IDC","OmdiaTV","DSCC"]:
+        for src in ["CP","트렌드포스","IDC","OmdiaTV","DSCC"]:
             sub = df[df["source"]==src]
             if sub.empty: 
                 continue

@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os  # ✅ 추가: 환경변수 읽기용
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -27,6 +28,15 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+
+# =========================
+# ✅ Naver Search OpenAPI Keys
+# =========================
+# Windows/Powershell:
+#   setx NAVER_CLIENT_ID "xxxx"
+#   setx NAVER_CLIENT_SECRET "yyyy"
+NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "djOyMSAgkV57wjSCdatn")
+NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "vXJ2asYqIo")
 
 # Application definition
 
@@ -117,7 +127,14 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache"
+    }
+}

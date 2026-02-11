@@ -1,7 +1,8 @@
 from io import BytesIO
 import re
-from openpyxl import load_workbook
 from datetime import date, datetime
+from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 
 MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -23,11 +24,10 @@ def _find_month_summary_sheet(wb):
 def _get_month_col_in_by_tier(month: int, year: int) -> int:
     """
     by Tier 시트의 월 컬럼 계산.
-    기준:
-      - 2025년 1월 시작열 = O(15)
-      - 2026년 1월 시작열 = AA(27)
+    기준(템플릿 확인 완료):
+      - 2025년 1월 시작열 = O(15)  => Jan-25 = O
+      - 2026년 1월 시작열 = AA(27) => Jan-26 = AA
       - 2027년 1월 시작열 = AM(39)
-    즉, 연도마다 12칸씩 증가하는 구조.
     """
     if not (1 <= month <= 12):
         raise ValueError(f"유효하지 않은 월입니다: {month}")
@@ -49,6 +49,13 @@ def _num(v):
     except Exception:
         return 0
 
+def _must_num(ws, addr: str) -> float:
+    v = ws[addr].value
+    if v is None or v == "":
+        raise ValueError(
+            f"[총평 시트] {addr} 값이 비어있습니다. "
+        )
+    return _num(v)
 
 # -----------------------------
 # by Coverage 업데이트용 유틸
@@ -61,7 +68,7 @@ def _make_month_label(year: int, month: int) -> str:
     return f"{MONTH_ABBR[month-1]}-{yy}"
 
 
-def _cell_to_month_label(v) -> str | None:
+def _cell_to_month_label(v):
     """
     셀 값이
     - datetime/date -> 'Dec-25'
@@ -89,7 +96,7 @@ def _contains_any(text: str, keywords) -> bool:
     return any(k.lower() in t for k in keywords)
 
 
-def _calc_coverage_from_work_sheet(checked_wb, *, sheet_name: str, tv_keywords: list[str]) -> list[float]:
+def _calc_coverage_from_work_sheet(checked_wb, *, sheet_name: str, tv_keywords):
     """
     지정한 *_work 시트에서 M7:N50을 읽어 6개 카테고리 합계를 반환:
     [Smartphone, AI, TV/Display, Semiconductor, Auto, IoT]
@@ -113,27 +120,16 @@ def _calc_coverage_from_work_sheet(checked_wb, *, sheet_name: str, tv_keywords: 
         n_txt = ws[f"N{r}"].value
         s = (str(n_txt) if n_txt is not None else "").strip()
 
-        # 스마트폰
         if "스마트폰" in s:
             sums["smartphone"] += m_val
-
-        # AI
         if "ai" in s.lower():
             sums["ai"] += m_val
-
-        # TV/Display
         if _contains_any(s, tv_keywords):
             sums["tv_display"] += m_val
-
-        # 반도체
         if "반도체" in s:
             sums["semi"] += m_val
-
-        # 전기차
         if "전기차" in s:
             sums["auto"] += m_val
-
-        # IoT
         if "iot" in s.lower():
             sums["iot"] += m_val
 
@@ -147,7 +143,7 @@ def _calc_coverage_from_work_sheet(checked_wb, *, sheet_name: str, tv_keywords: 
     ]
 
 
-def _calc_omdia_tv_from_cp_work(checked_wb, *, month: int, keywords: list[str]) -> float:
+def _calc_omdia_tv_from_cp_work(checked_wb, *, month: int, keywords):
     """
     CP_{m}_work 시트에서 M7:N50 중, N열 텍스트에 keywords가 포함된 행들의 M열 합계를 반환.
     (Omdia TV 단일 값)
@@ -163,7 +159,6 @@ def _calc_omdia_tv_from_cp_work(checked_wb, *, month: int, keywords: list[str]) 
         m_val = _num(ws[f"M{r}"].value)
         n_txt = ws[f"N{r}"].value
         s = (str(n_txt) if n_txt is not None else "").strip()
-
         if _contains_any(s, keywords):
             total += m_val
 
@@ -175,8 +170,8 @@ def _write_coverage_block_to_master(
     *,
     year: int,
     month: int,
-    start_col: int,   # B=2, H=8 ...
-    values: list,
+    start_col: int,   # B=2, H=8, N=14 ...
+    values,
     sheet_name: str = "by Coverage",
 ):
     """
@@ -187,7 +182,7 @@ def _write_coverage_block_to_master(
         raise ValueError(f"Master 파일에 '{sheet_name}' 시트가 없습니다.")
 
     ws = master_wb[sheet_name]
-    label = _make_month_label(year, month)  # 예: Dec-27
+    label = _make_month_label(year, month)  # 예: Jan-26
     row = _find_row_by_label(ws, label, label_col=1)
 
     if row is None:
@@ -197,10 +192,42 @@ def _write_coverage_block_to_master(
         ws.cell(row=row, column=start_col + i, value=v)
 
 
+# -----------------------------
+# by Tier 업데이트 (네가 준 규칙 그대로)
+# -----------------------------
+def _read_summary_EFG(summary_ws, row: int):
+    e = _must_num(summary_ws, f"E{row}")
+    f = _must_num(summary_ws, f"F{row}")
+    g = _must_num(summary_ws, f"G{row}")
+    return e, f, g
+
+
+def _write_by_tier_block(tier_ws, *, month_col: int, src_e: float, src_f: float, src_g: float,
+                        dst_rows: tuple):
+    """
+    dst_rows = (row_E, row_FminusE, row_G, row_SUM)
+    규칙:
+      - dst row_E       <- E
+      - dst row_FminusE <- (F - E)
+      - dst row_G       <- G
+      - dst row_SUM     <- SUM(위 3개)
+    """
+    r_e, r_fe, r_g, r_sum = dst_rows
+
+    # 값 입력
+    tier_ws.cell(row=r_e, column=month_col, value=src_e)
+    tier_ws.cell(row=r_fe, column=month_col, value=src_f - src_e)
+    tier_ws.cell(row=r_g, column=month_col, value=src_g)
+
+    # 합계는 수식으로(월이 바뀌면 열문자만 바뀜)
+    col_letter = get_column_letter(month_col)
+    tier_ws.cell(row=r_sum, column=month_col, value=f"=SUM({col_letter}{r_e}:{col_letter}{r_g})")
+
+
 def process_master_update(checked_bytes: bytes, master_bytes: bytes, *, year: int, month: int) -> bytes:
     """
     Step3:
-    1) 검수완료파일 '{m}월 총평'에서 by Tier 업데이트
+    1) 검수완료파일 '{m}월 총평'에서 by Tier 업데이트 (네가 준 규칙 적용)
     2) by Coverage 업데이트
        - Counterpoint: CP_{m}_work -> B~G (6개)
        - IDC        : IDC_{m}_work -> H~M (6개)
@@ -213,69 +240,61 @@ def process_master_update(checked_bytes: bytes, master_bytes: bytes, *, year: in
     if summary_ws is None or found_month is None:
         raise ValueError("검수완료파일에서 '{m}월 총평' 시트를 찾을 수 없습니다.")
 
-    # ✅ 안전장치: period로 받은 month와 파일 내 총평 시트 month가 다르면 중단
+    # 안전장치: period로 받은 month와 파일 내 총평 시트 month가 다르면 중단
     if found_month != month:
         raise ValueError(f"기간의 월({month})과 검수파일 총평 시트의 월({found_month})이 일치하지 않습니다.")
 
-    # 2) D5:G8 데이터 읽기
-    summary = {}
-    for r in range(5, 9):  # 5~8
-        summary[r] = {
-            "D": summary_ws[f"D{r}"].value,
-            "E": summary_ws[f"E{r}"].value,
-            "F": summary_ws[f"F{r}"].value,
-            "G": summary_ws[f"G{r}"].value,
-        }
-
-    # 3) 마스터 파일 로드
+    # 2) 마스터 파일 로드
     master_wb = load_workbook(BytesIO(master_bytes), data_only=False)
 
-    # 4) by Tier 업데이트
+    # -----------------------------
+    # 3) by Tier 업데이트
+    # -----------------------------
     if "by Tier" not in master_wb.sheetnames:
         raise ValueError("Master 파일에 'by Tier' 시트가 없습니다.")
     tier_ws = master_wb["by Tier"]
 
     month_col = _get_month_col_in_by_tier(month, year=year)
 
-    mapping = [
-        (3, 5, "E"),
-        (4, 5, "F-E"),
-        (5, 5, "G"),
-        (6, 5, "D"),
+    # CP: summary row 5 -> by Tier rows 3,4,5,6
+    e5, f5, g5 = _read_summary_EFG(summary_ws, 5)
+    _write_by_tier_block(
+        tier_ws,
+        month_col=month_col,
+        src_e=e5, src_f=f5, src_g=g5,
+        dst_rows=(3, 4, 5, 6),
+    )
 
-        (8, 6, "E"),
-        (9, 6, "F-E"),
-        (10, 6, "G"),
-        (11, 6, "D"),
+    # IDC: summary row 6 -> by Tier rows 8,9,10,11
+    e6, f6, g6 = _read_summary_EFG(summary_ws, 6)
+    _write_by_tier_block(
+        tier_ws,
+        month_col=month_col,
+        src_e=e6, src_f=f6, src_g=g6,
+        dst_rows=(8, 9, 10, 11),
+    )
 
-        (13, 7, "E"),
-        (14, 7, "F-E"),
-        (15, 7, "G"),
-        (16, 7, "D"),
+    # Omdia TV: summary row 7 -> by Tier rows 13,14,15,16
+    # (네 메시지에 E57로 적힌 건 오타로 보고 E7/F7/G7 기준으로 처리)
+    e7, f7, g7 = _read_summary_EFG(summary_ws, 7)
+    _write_by_tier_block(
+        tier_ws,
+        month_col=month_col,
+        src_e=e7, src_f=f7, src_g=g7,
+        dst_rows=(13, 14, 15, 16),
+    )
 
-        (18, 8, "E"),
-        (19, 8, "F-E"),
-        (20, 8, "G"),
-        (21, 8, "D"),
-    ]
-
-    for target_row, src_row, kind in mapping:
-        data = summary[src_row]
-        if kind == "E":
-            val = data["E"]
-        elif kind == "G":
-            val = data["G"]
-        elif kind == "D":
-            val = data["D"]
-        elif kind == "F-E":
-            val = _num(data["F"]) - _num(data["E"])
-        else:
-            val = None
-
-        tier_ws.cell(row=target_row, column=month_col, value=val)
+    # DSCC: summary row 8 -> by Tier rows 18,19,20,21
+    e8, f8, g8 = _read_summary_EFG(summary_ws, 8)
+    _write_by_tier_block(
+        tier_ws,
+        month_col=month_col,
+        src_e=e8, src_f=f8, src_g=g8,
+        dst_rows=(18, 19, 20, 21),
+    )
 
     # -----------------------------
-    # 5) by Coverage 업데이트
+    # 4) by Coverage 업데이트
     # -----------------------------
     # Counterpoint (B~G)
     cp_tv_keywords = ["tv", "디스플레이", "lcd", "led", "모니터", "oled", "xr"]
@@ -322,7 +341,7 @@ def process_master_update(checked_bytes: bytes, master_bytes: bytes, *, year: in
         values=[omdia_tv_val],
     )
 
-    # 6) 저장 후 반환
+    # 5) 저장 후 반환
     out = BytesIO()
     master_wb.save(out)
     out.seek(0)
