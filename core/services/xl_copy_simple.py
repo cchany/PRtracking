@@ -362,7 +362,7 @@ def classify_with_reason(text: str, source_hint: str) -> tuple[str, str]:
     # - 1개 국가면 "{국가} 디스플레이 시장"
     # =========================
     if DISPLAY_FORCE_RE.search(t):
-        geo = _pick_geo(t) or "전세계"   # 다중 국가는 _multi_geo_triggers_world로 전세계 처리됨
+        geo = _pick_geo(t) or "전세계"
         cat = _to_whitelist(_compose_category(geo, "디스플레이"))
         return cat, "R_FORCE_DISPLAY"
 
@@ -398,7 +398,14 @@ def classify_with_reason(text: str, source_hint: str) -> tuple[str, str]:
 
 
 # ===================== 카테고리 입력 루틴 (G=카테고리, H=reason) =====================
-def _fill_categories(ws, source_hint: str, start_row: int = 5, max_rows: int = 800):
+def _fill_categories(ws, source_hint: str, start_row: int = 5, max_rows: int | None = None):
+    """
+    max_rows가 None이면 시트의 실제 max_row까지 자동 처리.
+    (기존처럼 800/2500 같은 상한 때문에 누락되는 문제 제거)
+    """
+    if max_rows is None:
+        max_rows = ws.max_row or start_row
+
     for r in range(start_row, max_rows + 1):
         bval = ws.cell(row=r, column=2).value
         e_text = ws.cell(row=r, column=5).value
@@ -479,7 +486,7 @@ def process_monthly_copy(raw_bytes: bytes, monthly_bytes: bytes, month: int) -> 
     # 번호 매기기
     for name in [f"CP_{m}", f"트렌드포스_{m}", f"IDC_{m}", f"OmdiaTV_{m}", f"DSCC_{m}"]:
         if name in mon_wb.sheetnames:
-            _fill_auto_numbers(mon_wb[name])
+            _fill_auto_numbers(mon_wb[name], max_rows=3000)
 
     # A2 수식 업데이트
     for name in [f"트렌드포스_{m}", f"IDC_{m}", f"OmdiaTV_{m}", f"DSCC_{m}"]:
@@ -496,7 +503,7 @@ def process_monthly_copy(raw_bytes: bytes, monthly_bytes: bytes, month: int) -> 
 
     # 카테고리 자동 분류 (G열), reason(H열)
     if f"CP_{m}" in mon_wb.sheetnames:
-        _fill_categories(mon_wb[f"CP_{m}"], "CP")
+        _fill_categories(mon_wb[f"CP_{m}"], "CP") 
     if f"트렌드포스_{m}" in mon_wb.sheetnames:
         _fill_categories(mon_wb[f"트렌드포스_{m}"], "트렌드포스")
     if f"IDC_{m}" in mon_wb.sheetnames:
